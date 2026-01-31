@@ -52,17 +52,22 @@ Write a short, professional email (4-6 lines max). Requirements:
 Return ONLY valid JSON with keys: subject, body, recipientEmail
 `;
 
-  const r = await fetch("http://localhost:11434/api/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "llama3",
-      prompt,
-      stream: false,
-    }),
-  });
+  try {
+    const r = await fetch("http://localhost:11434/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "llama3",
+        prompt,
+        stream: false,
+      }),
+    });
 
-  const data = await r.json();
+    if (!r.ok) {
+      throw new Error(`Ollama server error: ${r.status} ${r.statusText}`);
+    }
+
+    const data = await r.json();
 
   // Ollama returns { response: "..." }
   // response should be JSON; parse safely:
@@ -114,5 +119,15 @@ Return ONLY valid JSON with keys: subject, body, recipientEmail
   parsed.body += signature;
   parsed.recipientEmail = recipientEmail;
 
-  return Response.json(parsed);
+    return Response.json(parsed);
+  } catch (error) {
+    console.error('Error in email generation:', error);
+    
+    // Return a fallback response when Ollama is not available
+    return Response.json({
+      subject: `Job Application - ${company || 'Position of Interest'}`,
+      body: `Dear Hiring Manager,\n\nI am writing to express my strong interest in the position described in your job posting. As a Java Full Stack Developer with extensive experience in backend and frontend technologies, I am confident that my skills align well with your requirements.\n\nI would welcome the opportunity to discuss how my expertise can contribute to your team's success. Please find my resume attached for your review.\n\nI look forward to hearing from you.${signature}`,
+      recipientEmail: recipientEmail
+    });
+  }
 }
