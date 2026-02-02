@@ -22,18 +22,19 @@ export async function POST(req) {
     // Use uploaded resume
     const bytes = await resumeFile.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    tempPath = join(tmpdir(), `${fromName}_Resume_${Date.now()}.pdf`);
+    const fileExtension = resumeFile.name.split('.').pop();
+    tempPath = join(tmpdir(), `${fromName}_Resume_${Date.now()}.${fileExtension}`);
     await writeFile(tempPath, buffer);
-    filename = `${fromName}_Resume.pdf`;
+    filename = `${fromName}_Resume.${fileExtension}`;
   } else if (useDefaultResume === 'true') {
-    // Use default PDF resume from root directory
-    const defaultResumePath = join(process.cwd(), 'PoojithJavaFullStackDeveloper.pdf');
+    // Use default Word document resume from root directory
+    const defaultResumePath = join(process.cwd(), 'Poojith Java Full Stack Developer.docx');
     
     if (existsSync(defaultResumePath)) {
       tempPath = defaultResumePath; // Use the file directly from root
-      filename = 'Poojith_Reddy_A_Resume.pdf';
+      filename = 'Poojith_Reddy_Java_Developer_Resume.docx';
     } else {
-      // Fallback: create a simple text version if PDF doesn't exist
+      // Fallback: create a simple text version if .docx doesn't exist
       const defaultResumeContent = `
 ${fromName}
 Java Full Stack Developer

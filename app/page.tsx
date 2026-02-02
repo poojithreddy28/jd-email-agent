@@ -222,7 +222,7 @@ export default function Home() {
             <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-6">
               <input
                 type="file"
-                accept=".pdf"
+                accept=".pdf,.doc,.docx"
                 onChange={(e) => setResume(e.target.files?.[0] || null)}
                 className="w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 dark:file:bg-gray-700 dark:file:text-gray-300"
               />
@@ -235,7 +235,7 @@ export default function Home() {
                 </p>
               ) : (
                 <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-                  Optional - Default resume will be used if none provided
+                  Optional - Default Word document resume will be used if none provided
                 </p>
               )}
             </div>
@@ -366,20 +366,32 @@ export default function Home() {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Subject
                     </label>
-                    <div className="px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                      <p className="text-gray-900 dark:text-white text-sm">{email.subject}</p>
-                    </div>
+                    <input
+                      type="text"
+                      value={email.subject}
+                      onChange={(e) => {
+                        const newEmails = [...generatedEmails];
+                        newEmails[index].subject = e.target.value;
+                        setGeneratedEmails(newEmails);
+                      }}
+                      className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all"
+                    />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Message
                     </label>
-                    <div className="px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                      <pre className="text-gray-900 dark:text-white text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                        {email.body}
-                      </pre>
-                    </div>
+                    <textarea
+                      value={email.body}
+                      onChange={(e) => {
+                        const newEmails = [...generatedEmails];
+                        newEmails[index].body = e.target.value;
+                        setGeneratedEmails(newEmails);
+                      }}
+                      rows={12}
+                      className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all resize-none font-sans"
+                    />
                   </div>
                 </div>
 
