@@ -47,7 +47,18 @@ Write a short, professional email (4-6 lines max). Requirements:
 - Keep it concise and direct
 - NO dashes or bullet points
 - End with a clear call to action
+- In the body, do NOT use the phrase "at your company"
+- In the body, do NOT use the phrase "at your organization"
+- In the body, do NOT use "Dear Hiring Manager" or similar greetings
+- In the body, do NOT use "at company" or "at the company"
+- The body must start with "Hi {Name}," where {Name} is the contact name from the JD
 - DO NOT include signature (will be added automatically)
+
+Subject rules:
+- Extract the job role/title from the JD and use it in the subject
+- Extract the job location from the JD (city/state/country or Remote/Hybrid) and include it in the subject
+- Use this format: "Application for {Role} - {Location}"
+- If no location is found, use: "Application for {Role}"
 
 Return ONLY valid JSON with keys: subject, body, recipientEmail
 `;
