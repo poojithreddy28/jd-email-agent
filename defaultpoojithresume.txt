@@ -244,7 +244,7 @@ Responsibilities:
 Environment: Java, Spring, Kotlin, Hibernate, Java Script, Typescript, Node.js, jQuery, Ajax, CSS, Bootstrap, AJAX, HTML5, 
 DB2, CRUD, SQL, JDBC, Apache CXF, REST (Rest API’s), Web Services, WES, Python, WCS, WMS, Camunda, Eclipse, Subversion (SVN), SQL Server, JUNIT, Scrum, UML, JSP, Java Server Pages Standard Tag Library (JSTL), SAML, OiDC, Windows, Agile Methodology. 
  
-American Express, Phoenix, AZ, USA		                                                                                                     Feb 2014 – Dec 2016
+Wipro                    					                                                                                                     Feb 2014 – Dec 2016
 Java Developer                                                                                                                                                                    	 	  
 Responsibilities: 
 •	Actively collaborated with the UI/UX team to implement responsive and user-friendly interfaces using HTML, CSS, and JavaScript. 
