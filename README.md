@@ -1,9 +1,14 @@
-# JD Email Agent
+# JD Email Agent & Resume Tailor Pro
 
-AI-powered job application email generator using Next.js and Ollama LLM. Automatically extracts recipient emails from job descriptions, generates personalized emails, and sends them with resume attachments.
+A comprehensive job application toolkit featuring:
+1. **JD Email Agent**: AI-powered job application email generator
+2. **Resume Tailor Pro**: AI-powered resume customization tool
+
+Automatically extracts recipient emails from job descriptions, generates personalized emails, creates tailored resumes, and sends applications with resume attachments.
 
 ## 🎯 Features
 
+### JD Email Agent
 - **Single/Multiple JD Processing**: Generate emails for one or multiple job descriptions
 - **Auto Email Extraction**: Automatically detects recipient emails from job postings
 - **Company Detection**: Extracts company names from job descriptions
@@ -14,13 +19,29 @@ AI-powered job application email generator using Next.js and Ollama LLM. Automat
 - **Responsive UI**: Clean interface with dark mode support
 - **Real-time Processing**: Live feedback and status updates
 
+### Resume Tailor Pro ✨ NEW
+- **Two Resume Modes**: Full-Time and C-to-C (Corp-to-Corp) formats
+- **AI-Powered Customization**: Uses Google Gemini to tailor resumes to job descriptions
+- **Multiple Input Methods**: Paste text or upload PDF/DOCX files
+- **Copy-Paste Ready**: Formatted for Microsoft Word with bold tags
+- **Section-Wise Copying**: Copy entire resume or individual sections
+- **Smart Formatting**: Auto-bold for tech stack, metrics, and key achievements
+- **Full-Time Mode**: 5 bullets per company with business + technical focus
+- **C-to-C Mode**: 30 bullets per client for detailed contract work
+- **[Full Documentation](RESUME_TAILOR_DOCS.md)**: Complete guide and best practices
+
 ## 🚀 Tech Stack
 
 - **Frontend**: Next.js 16, React, Tailwind CSS
 - **Backend**: Next.js API Routes
-- **AI/LLM**: Ollama (llama3 model)
+- **AI/LLM**: 
+  - Ollama (llama3 model) for email generation
+  - Google Gemini 1.5 Flash for resume tailoring
 - **Email**: Nodemailer with Gmail SMTP
-- **File Handling**: Native FormData API
+- **File Handling**: 
+  - FormData API
+  - pdf-parse for PDF processing
+  - mammoth for DOCX processing
 - **Styling**: Tailwind CSS with dark mode
 
 ## 🔧 Installation
@@ -73,23 +94,50 @@ AI-powered job application email generator using Next.js and Ollama LLM. Automat
 
 ## 🎮 Usage
 
-### Single Job Mode
+### JD Email Agent
+
+#### Single Job Mode
 1. Select "Single JD" mode
 2. Paste job description
 3. Click "Generate Email"
 4. Review and send directly
 
-### Multiple Jobs Mode
+#### Multiple Jobs Mode
 1. Select "Multiple JDs" mode
 2. Add multiple job descriptions
 3. Click "Generate All Emails"
 4. Send each email individually
 
-### Features in Action
+#### Features in Action
 - **Auto Email Detection**: Recipient emails are automatically extracted
 - **Smart Content**: AI analyzes JD and generates relevant skills
 - **Professional Signature**: Consistent professional formatting
 - **Resume Handling**: Uses default resume if none uploaded
+
+### Resume Tailor Pro ✨
+
+#### Quick Start
+1. Navigate to `/resume-tailor` or click link from main page
+2. Enter your Google Gemini API key ([Get one free](https://aistudio.google.com/app/apikey))
+3. Select mode: Full-Time or C-to-C
+4. Paste job description
+5. Input resume (paste text or upload PDF/DOCX)
+6. Click "Generate Tailored Resume"
+7. Copy output sections to Word
+
+#### Full-Time Mode
+- 2-5 line professional summary
+- 5 bullets per company
+- Business impact + technical depth
+- Perfect for traditional corporate roles
+
+#### C-to-C Mode
+- 30 bullet summary
+- 30 bullets per client (recent 2 clients)
+- Heavy technical detail with metrics
+- Ideal for contract/consulting work
+
+📖 **[Complete Resume Tailor Documentation](RESUME_TAILOR_DOCS.md)**
 
 ## 📁 Project Structure
 
@@ -98,15 +146,20 @@ jd-email-agent/
 ├── app/
 │   ├── api/
 │   │   ├── generate/
-│   │   │   └── route.js          # LLM email generation
-│   │   └── send/
-│   │       └── route.js          # Email sending logic
+│   │   │   └── route.js          # Email generation with Ollama
+│   │   ├── send/
+│   │   │   └── route.js          # Email sending logic
+│   │   └── tailor-resume/
+│   │       └── route.js          # Resume tailoring with Gemini
+│   ├── resume-tailor/
+│   │   └── page.tsx              # Resume Tailor UI
 │   ├── globals.css
 │   ├── layout.tsx
-│   └── page.tsx                  # Main UI component
+│   └── page.tsx                  # JD Email Agent UI
 ├── public/
 ├── PoojithJavaFullStackDeveloper.pdf  # Default resume
 ├── defaultpoojithresume.txt           # Resume text content
+├── RESUME_TAILOR_DOCS.md              # Resume Tailor documentation
 ├── .env.local                         # Environment variables
 └── package.json
 ```
@@ -117,11 +170,19 @@ jd-email-agent/
 Generates personalized emails from job descriptions
 - **Input**: FormData with JD, personal info, optional resume
 - **Output**: JSON with subject, body, recipientEmail
+- **AI Model**: Ollama llama3
 
 ### POST `/api/send`
 Sends emails with resume attachments
 - **Input**: FormData with email details and resume
 - **Output**: Success confirmation
+
+### POST `/api/tailor-resume` ✨ NEW
+Generates tailored resumes from job descriptions
+- **Input**: FormData with JD, resume (text/file), mode, Gemini API key
+- **Output**: JSON with summary and experience sections
+- **AI Model**: Google Gemini 1.5 Flash
+- **File Support**: PDF and DOCX parsing
 
 ## ⚙️ Configuration
 
@@ -157,8 +218,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [Next.js](https://nextjs.org/) for the full-stack framework
 - [Ollama](https://ollama.ai/) for local LLM hosting
+- [Google Gemini](https://ai.google.dev/) for resume AI tailoring
 - [Tailwind CSS](https://tailwindcss.com/) for styling
 - [Nodemailer](https://nodemailer.com/) for email functionality
+- [pdf-parse](https://www.npmjs.com/package/pdf-parse) for PDF processing
+- [mammoth](https://www.npmjs.com/package/mammoth) for DOCX processing
 
 ---
 
