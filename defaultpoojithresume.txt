@@ -1,7 +1,7 @@
 Poojith Reddy A
 Senior Java Full Stack Developer
 Phone: 312-536-9779 | Email: poojithreddy.se@gmail.com
-LinkedIn
+LinkedIn : https://www.linkedin.com/in/poojith-reddy-com/
 
 PROFESSIONAL SUMMARY
 •	Senior Java Full Stack Developer with 11+ years of experience delivering high-performance enterprise applications using Java/J2EE, Spring MVC, Hibernate, REST APIs, and modern JavaScript frameworks.
