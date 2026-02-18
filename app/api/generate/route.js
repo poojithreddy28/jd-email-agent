@@ -1,11 +1,33 @@
 export async function POST(req) {
-  const formData = await req.formData();
+  // Check content type to determine how to parse the request
+  const contentType = req.headers.get('content-type') || '';
+  let jd, name, email, phone, resume;
   
-  const jd = formData.get('jd');
-  const name = formData.get('name') || 'Poojith Reddy A';
-  const email = formData.get('email') || 'poojithreddy.se@gmail.com';
-  const phone = formData.get('phone') || '+1 (312) 536-9779';
-  const resume = formData.get('resume');
+  if (contentType.includes('application/json')) {
+    // Handle JSON request (from WhatsApp send-email API)
+    const body = await req.json();
+    jd = body.jd;
+    name = body.name || 'Poojith Reddy A';
+    email = body.email || 'poojithreddy.se@gmail.com';
+    phone = body.phone || '+1 (312) 536-9779';
+    resume = body.resume;
+  } else {
+    // Handle FormData request (from UI)
+    try {
+      const formData = await req.formData();
+      jd = formData.get('jd');
+      name = formData.get('name') || 'Poojith Reddy A';
+      email = formData.get('email') || 'poojithreddy.se@gmail.com';
+      phone = formData.get('phone') || '+1 (312) 536-9779';
+      resume = formData.get('resume');
+    } catch (formError) {
+      console.error('Error parsing FormData:', formError);
+      return Response.json(
+        { error: 'Invalid request format' },
+        { status: 400 }
+      );
+    }
+  }
 
   // Extract email from JD using regex patterns
   const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
@@ -84,46 +106,27 @@ Return ONLY valid JSON with keys: subject, body, recipientEmail
   // response should be JSON; parse safely:
   let parsed;
   try {
-    // Clean the response by removing control characters and fixing common issues
-    let cleanResponse = data.response
-      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
-      .replace(/\n/g, '\\n') // Escape newlines
-      .replace(/\r/g, '\\r') // Escape carriage returns
-      .replace(/\t/g, '\\t') // Escape tabs
-      .trim();
+    // First, try to extract JSON from the response (in case model adds extra text)
+    const jsonStart = data.response.indexOf("{");
+    const jsonEnd = data.response.lastIndexOf("}");
     
-    parsed = JSON.parse(cleanResponse);
-  } catch (e) {
-    console.error('First parse attempt failed:', e);
-    try {
-      // fallback if the model adds text - extract JSON part
-      const jsonStart = data.response.indexOf("{");
-      const jsonEnd = data.response.lastIndexOf("}");
-      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-        let jsonPart = data.response.slice(jsonStart, jsonEnd + 1);
-        // Clean the extracted JSON part
-        jsonPart = jsonPart
-          .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
-          .replace(/\n/g, '\\n') // Escape newlines
-          .replace(/\r/g, '\\r') // Escape carriage returns  
-          .replace(/\t/g, '\\t'); // Escape tabs
-        
-        parsed = JSON.parse(jsonPart);
-      } else {
-        throw new Error('No valid JSON found in response');
-      }
-    } catch (e2) {
-      console.error('Second parse attempt failed:', e2);
-      // Ultimate fallback - create a structured response
-      const responseText = data.response || 'Error generating email';
-      parsed = {
-        subject: "Job Application - " + (company || "Interested Position"),
-        body: responseText.includes('{') ? 
-          "I am writing to express my interest in the position. Based on the job description provided, I believe my skills and experience align well with your requirements. I would welcome the opportunity to discuss how I can contribute to your team." :
-          responseText,
-        recipientEmail: recipientEmail
-      };
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+      const jsonPart = data.response.slice(jsonStart, jsonEnd + 1);
+      parsed = JSON.parse(jsonPart);
+    } else {
+      // If no JSON brackets found, try parsing the whole response
+      parsed = JSON.parse(data.response.trim());
     }
+  } catch (e) {
+    console.error('JSON parse failed:', e);
+    console.error('Response was:', data.response);
+    
+    // Ultimate fallback - create a structured response
+    parsed = {
+      subject: "Job Application - " + (company || "Interested Position"),
+      body: "I am writing to express my interest in the position described in your job posting. As a Java Full Stack Developer with extensive experience in backend and frontend technologies, I am confident that my skills align well with your requirements. I would welcome the opportunity to discuss how my expertise can contribute to your team's success.",
+      recipientEmail: recipientEmail
+    };
   }
 
   // Add signature to body and recipient email
