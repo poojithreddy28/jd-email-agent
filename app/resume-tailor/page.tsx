@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Upload, Copy, Check, Briefcase, UserCircle } from 'lucide-react';
 
@@ -17,14 +17,33 @@ export default function ResumeTailor() {
   const [resumeText, setResumeText] = useState('');
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [mode, setMode] = useState<'fulltime' | 'ctoc'>('fulltime');
+  const [outputMode, setOutputMode] = useState<'text' | 'pdf'>('text');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [output, setOutput] = useState<ResumeOutput | null>(null);
+  const [htmlPreview, setHtmlPreview] = useState<string | null>(null);
+  const [docxBase64, setDocxBase64] = useState<string | null>(null);
+  const [generationTime, setGenerationTime] = useState<string | null>(null);
+  const [pdfFilename, setPdfFilename] = useState<string>('PoojithResume.docx');
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
+
+  // Clear file when switching to DOCX mode
+  useEffect(() => {
+    if (outputMode === 'pdf' && resumeFile) {
+      setResumeFile(null);
+      setError('');
+    }
+  }, [outputMode, resumeFile]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (outputMode === 'pdf') {
+      setError('File upload is not available in DOCX mode. Please paste your resume text below.');
+      e.target.value = '';
+      return;
+    }
 
     if (!file.name.match(/\.(pdf|docx?)$/i)) {
       setError('Please upload a PDF or DOCX file');
@@ -42,26 +61,50 @@ export default function ResumeTailor() {
       return;
     }
 
-    if (!resumeText.trim() && !resumeFile) {
-      setError('Please paste your resume or upload a file');
-      return;
+    // Validation based on output mode
+    if (outputMode === 'pdf') {
+      // Resume is optional in DOCX mode - will use default if not provided
+      if (resumeText.trim()) {
+        // User provided text, validate it's not empty
+      }
+      // If no resume text, default resume will be used automatically
+    } else {
+      if (!resumeText.trim() && !resumeFile) {
+        setError('Please paste your resume or upload a file');
+        return;
+      }
     }
 
     setLoading(true);
     setError('');
+    setOutput(null);
+    setHtmlPreview(null);
+    setDocxBase64(null);
+    setGenerationTime(null);
 
     try {
       const formData = new FormData();
       formData.append('jobDescription', jobDescription);
       formData.append('mode', mode);
       
-      if (resumeFile) {
-        formData.append('resumeFile', resumeFile);
+      // Only send file in text mode, only send text for DOCX mode if provided
+      if (outputMode === 'pdf') {
+        if (resumeText.trim()) {
+          formData.append('resumeText', resumeText);
+        }
+        // If no resume text, backend will use default resume
       } else {
-        formData.append('resumeText', resumeText);
+        if (resumeFile) {
+          formData.append('resumeFile', resumeFile);
+        } else if (resumeText) {
+          formData.append('resumeText', resumeText);
+        }
       }
 
-      const response = await fetch('/api/tailor-resume', {
+      // Choose API endpoint based on output mode
+      const endpoint = outputMode === 'pdf' ? '/api/tailor-resume-pdf' : '/api/tailor-resume';
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         body: formData,
       });
@@ -71,8 +114,30 @@ export default function ResumeTailor() {
         throw new Error(errorData.error || 'Failed to generate resume');
       }
 
-      const data = await response.json();
-      setOutput(data);
+      if (outputMode === 'pdf') {
+        // Handle DOCX JSON response with preview
+        const data = await response.json();
+        setHtmlPreview(data.htmlPreview);
+        setDocxBase64(data.docxBase64);
+        setGenerationTime(data.generationTime);
+        
+        // Extract job role from JD for filename
+        const roleMatch = jobDescription.match(/(?:position|role|title|hiring|for|developer|engineer)\s*:?\s*([^\n,.!?]{3,50})/i);
+        let role = 'Position';
+        if (roleMatch) {
+          role = roleMatch[1].trim()
+            .replace(/^(a|an|the)\s+/i, '')
+            .replace(/[^a-zA-Z0-9\s]/g, '')
+            .replace(/\s+/g, '_')
+            .substring(0, 30);
+        }
+        const filename = `PoojithResume_${role}.docx`;
+        setPdfFilename(filename);
+      } else {
+        // Handle text response
+        const data = await response.json();
+        setOutput(data);
+      }
     } catch (err) {
       setError('Error generating resume: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
@@ -93,7 +158,7 @@ export default function ResumeTailor() {
     } else if (section === 'experience' && companyIndex !== undefined) {
       const exp = output.experience[companyIndex];
       const productsLine = exp.products ? `Products: ${exp.products}\n\n` : '';
-      text = `${exp.company}\n${productsLine}\n${exp.bullets.map((b, i) => `• ${b}`).join('\n\n')}`;
+      text = `${exp.company}\n${productsLine}\n${exp.bullets.map((b) => `• ${b}`).join('\n\n')}`;
     }
 
     navigator.clipboard.writeText(text);
@@ -119,6 +184,29 @@ export default function ResumeTailor() {
     setTimeout(() => setCopiedSection(null), 2000);
   };
 
+  const downloadDocx = () => {
+    if (!docxBase64) return;
+    
+    // Convert base64 to blob
+    const byteCharacters = atob(docxBase64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    
+    // Create download link
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = pdfFilename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-5xl mx-auto px-6 py-12">
@@ -141,7 +229,7 @@ export default function ResumeTailor() {
           className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 mb-8 shadow-sm hover:shadow-md transition-shadow"
         >
           {/* Mode Toggle */}
-          <div className="mb-8">
+          <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Employment Type</label>
             <div className="inline-flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
               <button
@@ -169,6 +257,40 @@ export default function ResumeTailor() {
             </div>
           </div>
 
+          {/* Output Mode Toggle */}
+          <div className="mb-8">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Output Format</label>
+            <div className="inline-flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+              <button
+                onClick={() => setOutputMode('text')}
+                className={`px-6 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                  outputMode === 'text'
+                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                Text View
+              </button>
+              <button
+                onClick={() => setOutputMode('pdf')}
+                className={`px-6 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
+                  outputMode === 'pdf'
+                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                DOCX Download
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              {outputMode === 'pdf' 
+                ? '📄 Generates a formatted Word document (DOCX) with 30 summary bullets, 30 bullets for first client, and 30 for second client. Shows generation time. Recommended: Paste resume text for best results.'
+                : '📝 Displays text output for easy copying and editing. Supports file uploads (PDF/DOCX)'}
+            </p>
+          </div>
+
           {/* Job Description */}
           <div className="mb-8">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Job Description</label>
@@ -185,6 +307,14 @@ export default function ResumeTailor() {
           <div className="mb-8">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Your Resume</label>
             
+            {outputMode === 'pdf' && (
+              <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  💡 For DOCX output mode, we recommend pasting your resume text below for best results. Generation time will be displayed after download.
+                </p>
+              </div>
+            )}
+            
             {/* File Upload */}
             <div className="mb-4">
               <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 hover:border-gray-400 dark:hover:border-gray-500 transition-colors">
@@ -192,7 +322,8 @@ export default function ResumeTailor() {
                   type="file"
                   accept=".pdf,.docx,.doc"
                   onChange={handleFileUpload}
-                  className="w-full text-sm text-gray-600 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-gray-900 dark:file:bg-gray-600 file:text-white hover:file:bg-gray-800 dark:hover:file:bg-gray-500 transition-all"
+                  disabled={outputMode === 'pdf'}
+                  className="w-full text-sm text-gray-600 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-gray-900 dark:file:bg-gray-600 file:text-white hover:file:bg-gray-800 dark:hover:file:bg-gray-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 {resumeFile && (
                   <p className="mt-3 text-sm text-gray-600 dark:text-gray-400 flex items-center">
@@ -268,7 +399,7 @@ export default function ResumeTailor() {
 
         {/* Output */}
         <AnimatePresence>
-          {output && (
+          {output && outputMode === 'text' && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -411,6 +542,75 @@ export default function ResumeTailor() {
               <div className="text-center pt-6">
                 <button
                   onClick={() => setOutput(null)}
+                  className="px-6 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-200 font-medium rounded-lg transition-colors"
+                >
+                  Generate New Resume
+                </button>
+              </div>
+            </motion.div>
+          )}
+          
+          {/* DOCX Preview */}
+          {htmlPreview && outputMode === 'pdf' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-4"
+            >
+              {/* Generation Time and Download Header */}
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-100 dark:bg-green-800 rounded-full flex items-center justify-center">
+                    <Check className="w-6 h-6 text-green-600 dark:text-green-300" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-green-900 dark:text-green-100">Resume Generated Successfully!</p>
+                    <p className="text-sm text-green-700 dark:text-green-300">
+                      Generated in {generationTime} • Preview below and download when ready
+                    </p>
+                  </div>
+                </div>
+                <motion.button
+                  onClick={downloadDocx}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  Download DOCX
+                </motion.button>
+              </div>
+
+              {/* Preview iframe */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="bg-gray-100 dark:bg-gray-700 px-4 py-3 border-b border-gray-200 dark:border-gray-600">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">📄 Preview - {pdfFilename}</p>
+                </div>
+                <div className="p-6 max-h-[600px] overflow-y-auto">
+                  <iframe
+                    srcDoc={htmlPreview}
+                    title="Resume Preview"
+                    className="w-full min-h-[800px] border-0"
+                    style={{ backgroundColor: 'white' }}
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-4 justify-center">
+                <button
+                  onClick={downloadDocx}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  Download DOCX
+                </button>
+                <button
+                  onClick={() => {
+                    setHtmlPreview(null);
+                    setDocxBase64(null);
+                    setGenerationTime(null);
+                  }}
                   className="px-6 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-200 font-medium rounded-lg transition-colors"
                 >
                   Generate New Resume
