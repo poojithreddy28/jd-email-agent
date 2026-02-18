@@ -53,6 +53,22 @@ export default function Navigation() {
               )}
             </Link>
             
+            <Link 
+              href="/whatsapp-monitor"
+              className="relative text-sm font-medium transition-colors hover:text-gray-900 dark:hover:text-gray-100"
+            >
+              <span className={pathname === '/whatsapp-monitor' ? 'text-gray-900 dark:text-gray-100' : 'text-gray-600 dark:text-gray-400'}>
+                WhatsApp Monitor
+              </span>
+              {pathname === '/whatsapp-monitor' && (
+                <motion.div
+                  layoutId="navbar-indicator"
+                  className="absolute -bottom-[17px] left-0 right-0 h-0.5 bg-gray-900 dark:bg-gray-100"
+                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                />
+              )}
+            </Link>
+            
             <ThemeToggle />
           </div>
         </div>
