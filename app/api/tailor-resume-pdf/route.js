@@ -18,6 +18,19 @@ export async function POST(req) {
     const jobDescription = formData.get('jobDescription');
     const resumeFile = formData.get('resumeFile');
     const resumeText = formData.get('resumeText');
+    
+    // Extract user credentials (with defaults)
+    const userName = formData.get('userName') || 'Poojith Reddy A';
+    const userEmail = formData.get('userEmail') || 'poojithreddy.se@gmail.com';
+    const userPhone = formData.get('userPhone') || '312-536-9779';
+    const userLinkedIn = formData.get('userLinkedIn') || 'https://www.linkedin.com/in/poojith-reddy-com/';
+    
+    const userCredentials = {
+      name: userName,
+      email: userEmail,
+      phone: userPhone,
+      linkedin: userLinkedIn
+    };
 
     if (!jobDescription) {
       return NextResponse.json({ error: 'Job description is required' }, { status: 400 });
@@ -48,7 +61,7 @@ export async function POST(req) {
     console.log('📝 Starting JD-based resume tailoring (MULTI-PASS APPROACH)...');
 
     // Generate tailored content with multiple API calls
-    const tailoredContent = await generateTailoredContent(jobDescription, resumeContent);
+    const tailoredContent = await generateTailoredContent(jobDescription, resumeContent, userCredentials);
     
     // Create DOCX with formatting
     console.log('\n📄 Generating DOCX...');
@@ -157,8 +170,41 @@ function extractTechnicalSkills(resumeContent) {
   return skills;
 }
 
+// RETRY HELPER FUNCTION
+async function generateWithRetry(sectionName, generatorFn, maxRetries, minAcceptable, bulletField) {
+  let retryCount = 0;
+  
+  while (retryCount < maxRetries) {
+    try {
+      const parsed = await generatorFn();
+      
+      const bullets = bulletField === 'summary' ? parsed.summary : parsed.bullets;
+      
+      if (bullets && bullets.length >= minAcceptable) {
+        console.log(`   ✅ ${sectionName}: ${bullets.length} bullets generated\n`);
+        return parsed;
+      } else {
+        retryCount++;
+        console.log(`   ⚠️ ${sectionName} attempt ${retryCount}: Got ${bullets?.length || 0} bullets (need ${minAcceptable}+), retrying...`);
+        if (retryCount >= maxRetries) {
+          console.log(`   ✅ ${sectionName}: ${bullets.length} bullets generated (after ${retryCount} attempts)\n`);
+          return parsed;
+        }
+      }
+    } catch (error) {
+      retryCount++;
+      console.error(`   ❌ ${sectionName} parse error (attempt ${retryCount}):`, error.message);
+      if (retryCount >= maxRetries) {
+        throw new Error(`${sectionName} JSON parsing failed after ${maxRetries} attempts: ${error.message}`);
+      }
+    }
+  }
+  
+  throw new Error(`${sectionName} generation failed after retries`);
+}
+
 // MAIN GENERATION FUNCTION - MULTI-PASS APPROACH
-async function generateTailoredContent(jobDescription, resumeContent) {
+async function generateTailoredContent(jobDescription, resumeContent, userCredentials) {
   console.log('\n🚀 Starting MULTI-PASS content generation...\n');
   
   // STEP 1: Extract original bullets for companies that don't need AI tailoring
@@ -173,9 +219,17 @@ async function generateTailoredContent(jobDescription, resumeContent) {
   console.log(`   - Wipro: ${wiproBullets.length} bullets`);
   console.log(`   - Technical Skills: ${Object.keys(technicalSkills).length} categories\n`);
   
-  // STEP 2: API call for Summary (30 bullets)
-  console.log('📝 STEP 2: Generating Summary (30 bullets) via Ollama...');
-  const summaryPrompt = `You are an expert resume writer. Generate a comprehensive professional summary tailored to this job.
+  // STEP 2, 3, 4: Run all three AI generations in PARALLEL for speed  
+  console.log('🚀 STEPS 2-4: Generating Summary, Bank of America, and UnitedHealth Group IN PARALLEL...\\n');
+  
+  const maxRetries = 2;  // Reduced from 3 to 2 for speed
+  const minAcceptable = 25; // Accept 25+ bullets
+  
+  // Run all three generations in parallel
+  const [summaryParsed, boaParsed, uhgParsed] = await Promise.all([
+    // Summary generation
+    generateWithRetry('Summary', async () => {
+      const summaryPrompt = `You are an expert resume writer. Generate a comprehensive professional summary tailored to this job.
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -194,65 +248,30 @@ REQUIREMENTS:
 
 OUTPUT FORMAT (JSON only, no extra text):
 {
-  "name": "Real Name From Resume",
-  "title": "Senior Java Full Stack Developer",
-  "email": "real@email.com",
-  "phone": "real-phone",
-  "summary": [
-    "First comprehensive bullet about experience and skills...",
-    "Second comprehensive bullet with metrics and achievements...",
-    "...continue until you have EXACTLY 30 bullets..."
+  \"name\": \"Real Name From Resume\",
+  \"title\": \"Senior Java Full Stack Developer\",
+  \"email\": \"real@email.com\",
+  \"phone\": \"real-phone\",
+  \"summary\": [
+    \"First comprehensive bullet about experience and skills...\",
+    \"Second comprehensive bullet with metrics and achievements...\",
+    \"...continue until you have EXACTLY 30 bullets...\"
   ]
 }
 
 🚨 CRITICAL RULES:
 1. Return ONLY the JSON object - no explanation, no commentary, no text before or after
-2. Generate ALL 30 bullets - Do NOT truncate or use "..." or "continue..."
+2. Generate ALL 30 bullets - Do NOT truncate or use \"...\" or \"continue...\"
 3. Write every single bullet in full detail
 4. Start your response with { and end with }`;
-
-  let summaryParsed;
-  let retryCount = 0;
-  const maxRetries = 3;
-  const minAcceptable = 25; // Accept 25+ bullets
-  let summaryResponse;
-  
-  while (retryCount < maxRetries) {
-    summaryResponse = await callOllama(summaryPrompt);
-    
-    try {
-      summaryParsed = extractJSON(summaryResponse);
       
-      if (summaryParsed.summary && summaryParsed.summary.length >= minAcceptable) {
-        console.log(`✅ Summary: ${summaryParsed.summary.length} bullets generated\n`);
-        break;
-      } else {
-        retryCount++;
-        console.log(`⚠️ Summary attempt ${retryCount}: Got ${summaryParsed.summary?.length || 0} bullets (need 25+), retrying...`);
-        if (retryCount >= maxRetries) {
-          // Accept what we have after max retries
-          console.log(`✅ Summary: ${summaryParsed.summary.length} bullets generated (after ${retryCount} attempts)\n`);
-          break;
-        }
-      }
-    } catch (error) {
-      retryCount++;
-      console.error(`❌ Summary parse error (attempt ${retryCount}):`, error.message);
-      if (retryCount >= maxRetries) {
-        console.error('📄 Raw response preview:', summaryResponse.substring(0, 1000));
-        throw new Error(`Summary JSON parsing failed after ${maxRetries} attempts: ${error.message}`);
-      }
-    }
-  }
-  
-  // Final validation
-  if (!summaryParsed || !summaryParsed.summary || summaryParsed.summary.length === 0) {
-    throw new Error('Summary generation failed: No valid bullets generated after retries');
-  }
-  
-  // STEP 3: API call for Bank of America (30 bullets)
-  console.log('📝 STEP 3: Generating Bank of America (30 bullets) via Ollama...');
-  const boaPrompt = `You are an expert resume writer. Generate comprehensive work experience bullets for Bank of America role.
+      const response = await callOllama(summaryPrompt);
+      return extractJSON(response);
+    }, maxRetries, minAcceptable, 'summary'),
+    
+    // Bank of America generation
+    generateWithRetry('Bank of America', async () => {
+      const boaPrompt = `You are an expert resume writer. Generate comprehensive work experience bullets for Bank of America role.
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -271,14 +290,14 @@ REQUIREMENTS:
 
 OUTPUT FORMAT (JSON only):
 {
-  "company": "Bank of America",
-  "location": "Jersey City, NJ",
-  "period": "Dec 2023 – Current",
-  "role": "Senior Java Full Stack Developer",
-  "bullets": [
-    "First comprehensive bullet with technologies and metrics...",
-    "Second comprehensive bullet with achievements...",
-    "...continue until EXACTLY 30 bullets total..."
+  \"company\": \"Bank of America\",
+  \"location\": \"Jersey City, NJ\",
+  \"period\": \"Dec 2023 – Current\",
+  \"role\": \"Senior Java Full Stack Developer\",
+  \"bullets\": [
+    \"First comprehensive bullet with technologies and metrics...\",
+    \"Second comprehensive bullet with achievements...\",
+    \"...continue until EXACTLY 30 bullets total...\"
   ]
 }
 
@@ -287,46 +306,14 @@ OUTPUT FORMAT (JSON only):
 2. Generate ALL 30 bullets - Do NOT truncate
 3. Write every single bullet in full detail
 4. Start your response with { and end with }`;
-
-  let boaParsed;
-  retryCount = 0;
-  let boaResponse;
-  
-  while (retryCount < maxRetries) {
-    boaResponse = await callOllama(boaPrompt);
-    
-    try {
-      boaParsed = extractJSON(boaResponse);
       
-      if (boaParsed.bullets && boaParsed.bullets.length >= minAcceptable) {
-        console.log(`✅ Bank of America: ${boaParsed.bullets.length} bullets generated\n`);
-        break;
-      } else {
-        retryCount++;
-        console.log(`⚠️ Bank of America attempt ${retryCount}: Got ${boaParsed.bullets?.length || 0} bullets (need 25+), retrying...`);
-        if (retryCount >= maxRetries) {
-          console.log(`✅ Bank of America: ${boaParsed.bullets.length} bullets generated (after ${retryCount} attempts)\n`);
-          break;
-        }
-      }
-    } catch (error) {
-      retryCount++;
-      console.error(`❌ Bank of America parse error (attempt ${retryCount}):`, error.message);
-      if (retryCount >= maxRetries) {
-        console.error('📄 Raw response preview:', boaResponse.substring(0, 1000));
-        throw new Error(`Bank of America JSON parsing failed after ${maxRetries} attempts: ${error.message}`);
-      }
-    }
-  }
-  
-  // Final validation
-  if (!boaParsed || !boaParsed.bullets || boaParsed.bullets.length === 0) {
-    throw new Error('Bank of America generation failed: No valid bullets generated after retries');
-  }
-  
-  // STEP 4: API call for UnitedHealth Group (30 bullets)
-  console.log('📝 STEP 4: Generating UnitedHealth Group (30 bullets) via Ollama...');
-  const uhgPrompt = `You are an expert resume writer. Generate comprehensive work experience bullets for UnitedHealth Group role.
+      const response = await callOllama(boaPrompt);
+      return extractJSON(response);
+    }, maxRetries, minAcceptable, 'bullets'),
+    
+    // UnitedHealth Group generation
+    generateWithRetry('UnitedHealth Group', async () => {
+      const uhgPrompt = `You are an expert resume writer. Generate comprehensive work experience bullets for UnitedHealth Group role.
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -345,14 +332,14 @@ REQUIREMENTS:
 
 OUTPUT FORMAT (JSON only):
 {
-  "company": "United Health Group",
-  "location": "Chicago, IL",
-  "period": "Aug 2020 – July 2023",
-  "role": "Java Full Stack Developer II",
-  "bullets": [
-    "First comprehensive bullet with technologies and metrics...",
-    "Second comprehensive bullet with achievements...",
-    "...continue until EXACTLY 30 bullets total..."
+  \"company\": \"United Health Group\",
+  \"location\": \"Chicago, IL\",
+  \"period\": \"Aug 2020 – July 2023\",
+  \"role\": \"Java Full Stack Developer II\",
+  \"bullets\": [
+    \"First comprehensive bullet with technologies and metrics...\",
+    \"Second comprehensive bullet with achievements...\",
+    \"...continue until EXACTLY 30 bullets total...\"
   ]
 }
 
@@ -361,52 +348,23 @@ OUTPUT FORMAT (JSON only):
 2. Generate ALL 30 bullets - Do NOT truncate
 3. Write every single bullet in full detail
 4. Start your response with { and end with }`;
-
-  let uhgParsed;
-  retryCount = 0;
-  let uhgResponse;
-  
-  while (retryCount < maxRetries) {
-    uhgResponse = await callOllama(uhgPrompt);
-    
-    try {
-      uhgParsed = extractJSON(uhgResponse);
       
-      if (uhgParsed.bullets && uhgParsed.bullets.length >= minAcceptable) {
-        console.log(`✅ UnitedHealth Group: ${uhgParsed.bullets.length} bullets generated\n`);
-        break;
-      } else {
-        retryCount++;
-        console.log(`⚠️ UnitedHealth Group attempt ${retryCount}: Got ${uhgParsed.bullets?.length || 0} bullets (need 25+), retrying...`);
-        if (retryCount >= maxRetries) {
-          console.log(`✅ UnitedHealth Group: ${uhgParsed.bullets.length} bullets generated (after ${retryCount} attempts)\n`);
-          break;
-        }
-      }
-    } catch (error) {
-      retryCount++;
-      console.error(`❌ UnitedHealth Group parse error (attempt ${retryCount}):`, error.message);
-      if (retryCount >= maxRetries) {
-        console.error('📄 Raw response preview:', uhgResponse.substring(0, 1000));
-        throw new Error(`UnitedHealth Group JSON parsing failed after ${maxRetries} attempts: ${error.message}`);
-      }
-    }
-  }
+      const response = await callOllama(uhgPrompt);
+      return extractJSON(response);
+    }, maxRetries, minAcceptable, 'bullets')
+  ]);
   
-  // Final validation
-  if (!uhgParsed || !uhgParsed.bullets || uhgParsed.bullets.length === 0) {
-    throw new Error('UnitedHealth Group generation failed: No valid bullets generated after retries');
-  }
+  console.log(`✅ All three sections generated in parallel!\n`);
   
-  // STEP 5: Assemble final content with hardcoded correct candidate info
+  // STEP 5: Assemble final content with user credentials
   console.log('📦 STEP 5: Assembling final resume structure...\n');
   
   const finalContent = {
-    name: 'Poojith Reddy A',
+    name: userCredentials.name,
     title: 'Senior Java Full Stack Developer',
-    email: 'poojithreddy.se@gmail.com',
-    phone: '312-536-9779',
-    linkedin: 'https://www.linkedin.com/in/poojith-reddy-com/',
+    email: userCredentials.email,
+    phone: userCredentials.phone,
+    linkedin: userCredentials.linkedin,
     summary: summaryParsed.summary,
     technicalSkills: technicalSkills,
     experiences: [
@@ -474,7 +432,7 @@ async function callOllama(prompt) {
       options: {
         temperature: 0.3,
         num_predict: -1,
-        num_ctx: 8192,
+        num_ctx: 4096,  // Reduced from 8192 for faster generation
         stop: []
       }
     })
@@ -634,7 +592,7 @@ async function generateResumeDOCX(content) {
   );
   
   // LinkedIn
-  const linkedinUrl = content.linkedin || 'https://www.linkedin.com/in/poojith-reddy-com/';
+  const linkedinUrl = content.linkedin;
   sections.push(
     new Paragraph({
       children: [
@@ -706,20 +664,35 @@ async function generateResumeDOCX(content) {
         children: [
           new TableCell({
             children: [new Paragraph({
-              children: [new TextRun({ text: category, bold: true, size: 20 })]
+              children: [new TextRun({ text: category, bold: true, size: 20 })],
+              spacing: { before: 60, after: 60 }
             })],
-            width: { size: 25, type: WidthType.PERCENTAGE },
+            width: { size: 22, type: WidthType.PERCENTAGE },
             verticalAlign: 'center',
-            shading: { fill: 'E8F4F8' }
+            shading: { fill: 'FFFFFF' },
+            margins: {
+              top: 100,
+              bottom: 100,
+              left: 100,
+              right: 100
+            }
           }),
           new TableCell({
             children: [new Paragraph({
-              children: [new TextRun({ text: skills, size: 20 })]
+              children: [new TextRun({ text: skills, size: 20 })],
+              spacing: { before: 60, after: 60 }
             })],
-            width: { size: 75, type: WidthType.PERCENTAGE },
-            verticalAlign: 'center'
+            width: { size: 78, type: WidthType.PERCENTAGE },
+            verticalAlign: 'center',
+            margins: {
+              top: 100,
+              bottom: 100,
+              left: 100,
+              right: 100
+            }
           })
-        ]
+        ],
+        height: { value: 300, rule: 'atLeast' }
       })
     );
   }
@@ -728,13 +701,17 @@ async function generateResumeDOCX(content) {
     new Table({
       rows: skillRows,
       width: { size: 100, type: WidthType.PERCENTAGE },
+      margins: {
+        top: 60,
+        bottom: 60
+      },
       borders: {
-        top: { style: BorderStyle.SINGLE, size: 1, color: '999999' },
-        bottom: { style: BorderStyle.SINGLE, size: 1, color: '999999' },
-        left: { style: BorderStyle.SINGLE, size: 1, color: '999999' },
-        right: { style: BorderStyle.SINGLE, size: 1, color: '999999' },
-        insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
-        insideVertical: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' }
+        top: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+        bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+        left: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+        right: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
+        insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+        insideVertical: { style: BorderStyle.SINGLE, size: 4, color: '000000' }
       }
     })
   );
@@ -753,23 +730,32 @@ async function generateResumeDOCX(content) {
   
   // Experience entries
   for (const exp of content.experiences) {
-    // Company name
+    // Company and location on first line (bold)
     sections.push(
       new Paragraph({
         children: [
-          new TextRun({ text: exp.company, size: 22, bold: true })
+          new TextRun({ 
+            text: `${exp.company}, ${exp.location}`,
+            size: 22,
+            bold: true
+          })
         ],
-        spacing: { before: 200, after: 50 }
+        spacing: { before: 250, after: 50 },
+        alignment: AlignmentType.LEFT
       })
     );
     
-    // Role, location, period
+    // Role | Period on second line (normal weight)
     sections.push(
       new Paragraph({
         children: [
-          new TextRun({ text: `${exp.role} | ${exp.location} | ${exp.period}`, size: 20 })
+          new TextRun({ 
+            text: `${exp.role} | ${exp.period}`,
+            size: 20,
+            bold: false
+          })
         ],
-        spacing: { after: 100 }
+        spacing: { after: 150 }
       })
     );
     
@@ -901,27 +887,48 @@ function generateHTMLPreview(content) {
     }
     table {
       width: 100%;
-      border-collapse: collapse;
+      border-collapse: separate;
+      border-spacing: 0;
       margin: 10px 0;
+      border: 1px solid #000;
+    }
+    table tr {
+      border-bottom: 1px solid #000;
     }
     table td {
-      border: 1px solid #999;
-      padding: 8px;
+      border-right: 1px solid #000;
+      padding: 8px 10px;
       vertical-align: top;
+      background-color: #fff;
+      line-height: 1.3;
     }
     table td:first-child {
-      width: 25%;
+      width: 22%;
       font-weight: bold;
-      background-color: #E8F4F8;
+      background-color: #fff;
+      border-right: 1px solid #000;
+    }
+    table td:last-child {
+      border-right: none;
+    }
+    table tr:last-child td {
+      border-bottom: none;
     }
     .company-header {
-      font-size: 12pt;
+      font-size: 13pt;
       font-weight: bold;
-      margin-top: 15px;
+      margin-top: 20px;
+      margin-bottom: 4px;
+      color: #000;
     }
     .role-info {
-      font-size: 10pt;
-      margin-bottom: 8px;
+      font-size: 11pt;
+      font-weight: normal;
+      margin-bottom: 10px;
+      color: #000;
+    }
+    .role-info .date {
+      float: right;
     }
   </style>
 </head>
@@ -936,7 +943,7 @@ function generateHTMLPreview(content) {
   </div>
   
   <div class="linkedin">
-    <a href="${content.linkedin || 'https://www.linkedin.com/in/poojith-reddy-com/'}" target="_blank">LinkedIn : ${content.linkedin || 'https://www.linkedin.com/in/poojith-reddy-com/'}</a>
+    <a href="${content.linkedin}" target="_blank">LinkedIn : ${content.linkedin}</a>
   </div>
   
   <div class="section-title">PROFESSIONAL SUMMARY</div>
@@ -951,8 +958,8 @@ function generateHTMLPreview(content) {
   
   <div class="section-title">WORK EXPERIENCE</div>
   ${content.experiences.map(exp => `
-  <div class="company-header">${exp.company}</div>
-  <div class="role-info">${exp.role} | ${exp.location} | ${exp.period}</div>
+  <div class="company-header">${exp.company}, ${exp.location}</div>
+  <div class="role-info">${exp.role} | ${exp.period}</div>
   ${exp.bullets.map(bullet => `<div class="bullet">• ${boldTechTerms(bullet)}</div>`).join('\n  ')}
   `).join('\n  ')}
 </body>
