@@ -20,7 +20,8 @@ export async function GET() {
       connected: false,
       monitoring: false,
     });
-  } catch (error) {
+  } catch (err) {
+    console.error('Status check error:', err);
     return NextResponse.json({
       connected: false,
       monitoring: false,

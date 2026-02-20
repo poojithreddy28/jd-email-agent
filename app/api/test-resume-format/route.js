@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, UnderlineType, convertInchesToTwip, ExternalHyperlink, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, convertInchesToTwip, ExternalHyperlink, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
 import fs from 'fs';
 import path from 'path';
 
@@ -15,7 +15,7 @@ if (!fs.existsSync(TEMP_DIR)) {
  * This endpoint uses pre-defined test data to quickly validate styling changes
  * without waiting for LLM generation (completes in under 5 seconds)
  */
-export async function POST(req) {
+export async function POST() {
   const startTime = Date.now();
   
   try {
