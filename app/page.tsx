@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Mail, Send, Copy, Check, Plus, X } from 'lucide-react';
+import { GradientBackground } from '@/components/GradientBackground';
 
 interface EmailData {
   subject: string;
@@ -126,16 +127,21 @@ export default function EmailGenerator() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-4xl mx-auto px-6 py-12">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 relative overflow-hidden pt-20 transition-colors duration-300">
+      {/* Animated gradient background */}
+      <div className="absolute inset-0 z-0">
+        <GradientBackground />
+      </div>
+      
+      <div className="max-w-4xl mx-auto px-6 py-12 relative z-10">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-12"
         >
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-3">Email Generator</h1>
-          <p className="text-lg text-gray-600 dark:text-gray-400">Generate personalized emails for job applications</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Email Generator</h1>
+          <p className="text-base text-gray-600 dark:text-gray-400">Generate personalized emails for job applications</p>
         </motion.div>
 
         {/* Main Form */}
@@ -144,28 +150,28 @@ export default function EmailGenerator() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.1 }}
           whileHover={{ scale: 1.002 }}
-          className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 mb-8 shadow-sm hover:shadow-md transition-shadow"
+          className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-gray-700 p-6 mb-6 shadow-2xl hover:shadow-3xl transition-shadow"
         >
           {/* Mode Toggle */}
-          <div className="mb-8">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Mode</label>
+          <div className="mb-6">
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Mode</label>
             <div className="inline-flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
               <button
                 onClick={() => setMode('single')}
-                className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
+                className={`px-6 py-2 rounded-md text-xs font-medium transition-all ${
                   mode === 'single'
-                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
+                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
                 }`}
               >
                 Single Job
               </button>
               <button
                 onClick={() => setMode('multiple')}
-                className={`px-6 py-2 rounded-md text-sm font-medium transition-all ${
+                className={`px-6 py-2 rounded-md text-xs font-medium transition-all ${
                   mode === 'multiple'
-                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm'
-                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
+                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
                 }`}
               >
                 Multiple Jobs
@@ -174,46 +180,46 @@ export default function EmailGenerator() {
           </div>
 
           {/* Personal Info */}
-          <div className="mb-8">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Personal Information</label>
+          <div className="mb-6">
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Personal Information</label>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
+                className="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
                 placeholder="Full name"
               />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
+                className="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
                 placeholder="Email"
               />
               <input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
+                className="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
                 placeholder="Phone"
               />
             </div>
           </div>
 
           {/* Resume Upload */}
-          <div className="mb-8">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Resume (Optional)</label>
-            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 hover:border-gray-400 dark:hover:border-gray-500 transition-colors">
+          <div className="mb-6">
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Resume (Optional)</label>
+            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 hover:border-gray-400 dark:hover:border-gray-500 transition-colors">
               <input
                 type="file"
                 accept=".pdf,.doc,.docx"
                 onChange={(e) => setResume(e.target.files?.[0] || null)}
-                className="w-full text-sm text-gray-600 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-gray-900 dark:file:bg-gray-600 file:text-white hover:file:bg-gray-800 dark:hover:file:bg-gray-500 transition-all"
+                className="w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-gray-900 dark:file:bg-white file:text-white dark:file:text-gray-900 hover:file:bg-gray-800 dark:hover:file:bg-gray-100 transition-all"
               />
               {resume && (
-                <p className="mt-3 text-sm text-gray-600 dark:text-gray-400 flex items-center">
-                  <FileText className="w-4 h-4 mr-2" />
+                <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 flex items-center">
+                  <FileText className="w-3 h-3 mr-2" />
                   {resume.name}
                 </p>
               )}
@@ -221,17 +227,17 @@ export default function EmailGenerator() {
           </div>
 
           {/* Job Descriptions */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
                 Job Description{mode === 'multiple' ? 's' : ''}
               </label>
               {mode === 'multiple' && (
                 <button
                   onClick={addJDField}
-                  className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                  className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
                 >
-                  <Plus className="w-4 h-4 mr-1" />
+                  <Plus className="w-3 h-3 mr-1" />
                   Add
                 </button>
               )}
@@ -246,8 +252,8 @@ export default function EmailGenerator() {
                   exit={{ opacity: 0 }}
                   value={jd}
                   onChange={(e) => setJd(e.target.value)}
-                  rows={10}
-                  className="w-full px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all resize-none"
+                  rows={8}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all resize-none"
                   placeholder="Paste job description..."
                 />
               ) : (
@@ -263,16 +269,16 @@ export default function EmailGenerator() {
                       <textarea
                         value={jobDesc}
                         onChange={(e) => updateJD(index, e.target.value)}
-                        rows={8}
-                        className="w-full px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all resize-none"
+                        rows={6}
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all resize-none"
                         placeholder={`Job ${index + 1}...`}
                       />
                       {multipleJDs.length > 1 && (
                         <button
                           onClick={() => removeJDField(index)}
-                          className="absolute top-3 right-3 p-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+                          className="absolute top-2 right-2 p-1 bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 rounded-md transition-colors"
                         >
-                          <X className="w-4 h-4 text-gray-600" />
+                          <X className="w-3 h-3 text-gray-600 dark:text-gray-300" />
                         </button>
                       )}
                     </motion.div>
@@ -289,9 +295,9 @@ export default function EmailGenerator() {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+                className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
               >
-                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -302,7 +308,7 @@ export default function EmailGenerator() {
             disabled={loading}
             whileHover={{ scale: loading ? 1 : 1.02 }}
             whileTap={{ scale: loading ? 1 : 0.98 }}
-            className="w-full py-4 bg-gray-900 dark:bg-gray-700 hover:bg-black dark:hover:bg-gray-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white font-medium rounded-lg transition-all disabled:cursor-not-allowed flex items-center justify-center"
+            className="w-full py-3 bg-gray-900 dark:bg-white hover:bg-black dark:hover:bg-gray-100 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white dark:text-gray-900 text-sm font-medium rounded-lg transition-all disabled:cursor-not-allowed flex items-center justify-center"
           >
             {loading ? (
               <>
@@ -343,34 +349,34 @@ export default function EmailGenerator() {
                     delay: index * 0.1 
                   }}
                   whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                  className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 shadow-sm hover:shadow-lg transition-shadow"
+                  className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-gray-700 p-6 shadow-xl hover:shadow-2xl transition-shadow"
                 >
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-white">
                       {generatedEmails.length > 1 ? `Email ${index + 1}` : 'Generated Email'}
                     </h3>
                     {emailsSent[index] && (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400">
                         <Check className="w-3 h-3 mr-1" />
                         Sent
                       </span>
                     )}
                   </div>
 
-                  <div className="space-y-4 mb-6">
+                  <div className="space-y-3 mb-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">To</label>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">To</label>
                       <input
                         type="email"
                         value={email.recipientEmail || ''}
                         onChange={(e) => updateRecipientEmail(index, e.target.value)}
-                        className="w-full px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
                         placeholder="recipient@company.com"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Subject</label>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Subject</label>
                       <input
                         type="text"
                         value={email.subject}
@@ -379,12 +385,12 @@ export default function EmailGenerator() {
                           newEmails[index].subject = e.target.value;
                           setGeneratedEmails(newEmails);
                         }}
-                        className="w-full px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message</label>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Message</label>
                       <textarea
                         value={email.body}
                         onChange={(e) => {
@@ -392,8 +398,8 @@ export default function EmailGenerator() {
                           newEmails[index].body = e.target.value;
                           setGeneratedEmails(newEmails);
                         }}
-                        rows={12}
-                        className="w-full px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all resize-none"
+                        rows={10}
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all resize-none"
                       />
                     </div>
                   </div>
@@ -404,7 +410,7 @@ export default function EmailGenerator() {
                       disabled={sending || !email.recipientEmail?.trim() || emailsSent[index]}
                       whileHover={{ scale: (sending || !email.recipientEmail?.trim() || emailsSent[index]) ? 1 : 1.02 }}
                       whileTap={{ scale: (sending || !email.recipientEmail?.trim() || emailsSent[index]) ? 1 : 0.98 }}
-                      className="flex-1 py-3 bg-gray-900 dark:bg-gray-700 hover:bg-black dark:hover:bg-gray-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white font-medium rounded-lg transition-all disabled:cursor-not-allowed flex items-center justify-center"
+                      className="flex-1 py-2.5 bg-gray-900 dark:bg-white hover:bg-black dark:hover:bg-gray-100 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white dark:text-gray-900 text-sm font-medium rounded-lg transition-all disabled:cursor-not-allowed flex items-center justify-center"
                     >
                       {sending ? (
                         <>
@@ -432,7 +438,7 @@ export default function EmailGenerator() {
                       onClick={() => copyEmail(email, index)}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="px-6 py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium rounded-lg transition-colors flex items-center"
+                      className="px-4 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg transition-colors flex items-center"
                     >
                       {copiedIndex === index ? (
                         <>
@@ -453,7 +459,7 @@ export default function EmailGenerator() {
               <div className="text-center">
                 <button
                   onClick={() => setGeneratedEmails([])}
-                  className="px-6 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-200 font-medium rounded-lg transition-colors"
+                  className="px-5 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg transition-colors"
                 >
                   Generate New Emails
                 </button>

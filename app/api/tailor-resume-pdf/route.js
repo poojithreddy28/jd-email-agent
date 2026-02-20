@@ -493,7 +493,7 @@ function extractJSON(text) {
     
     try {
       return JSON.parse(cleaned);
-    } catch (cleanedError) {
+    } catch {
       console.error('❌ Even cleaned JSON failed to parse');
       throw new Error(`JSON parsing failed: ${parseError.message}`);
     }

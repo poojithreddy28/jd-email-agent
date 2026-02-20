@@ -7,9 +7,6 @@ let monitoringStatus = {
   contactName: '',
 };
 
-// Will hold the message listener
-let messageListener = null;
-
 export async function POST(request) {
   try {
     const body = await request.json();

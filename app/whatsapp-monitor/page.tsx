@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Send, Check, Power, Clock, Search, Upload, X, Copy, Mail } from 'lucide-react';
+import { GradientBackground } from '@/components/GradientBackground';
 
 interface JobMessage {
   id: string;
@@ -298,21 +299,26 @@ export default function WhatsAppMonitor() {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900">
-      <div className="max-w-6xl mx-auto px-6 py-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 relative overflow-hidden pt-20 transition-colors duration-300">
+      {/* Animated gradient background */}
+      <div className="absolute inset-0 z-0">
+        <GradientBackground />
+      </div>
+      
+      <div className="max-w-6xl mx-auto px-6 py-8 relative z-10">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+          className="mb-6"
         >
-          <div className="flex items-center gap-3 mb-2">
-            <MessageSquare className="w-6 h-6 text-gray-700 dark:text-gray-300" />
-            <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">
+          <div className="flex items-center gap-3 mb-1">
+            <MessageSquare className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
               WhatsApp AI Agent
             </h1>
           </div>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
             Automatically detect job opportunities and generate personalized emails with AI
           </p>
         </motion.div>
@@ -322,19 +328,19 @@ export default function WhatsAppMonitor() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 mb-6"
+          className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-gray-700 p-5 mb-5 shadow-2xl"
         >
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-4">
               <div className={`w-3 h-3 rounded-full ${
                 isConnected ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
               }`} />
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white">
                   {isConnected ? 'Connected' : 'Not Connected'}
                 </h2>
                 {isConnected && contactName && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
                     Ready to search: {contactName}
                   </p>
                 )}
@@ -347,20 +353,20 @@ export default function WhatsAppMonitor() {
                 disabled={loading}
                 whileHover={{ scale: loading ? 1 : 1.02 }}
                 whileTap={{ scale: loading ? 1 : 0.98 }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors disabled:cursor-not-allowed flex items-center"
+                className="px-4 py-2 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 dark:disabled:bg-gray-700 text-white text-xs font-medium rounded-lg transition-colors disabled:cursor-not-allowed flex items-center"
               >
                 {loading ? (
                   <>
                     <motion.div
                       animate={{ rotate: 360 }}
                       transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"
+                      className="w-3 h-3 border-2 border-white border-t-transparent rounded-full mr-2"
                     />
                     Connecting...
                   </>
                 ) : (
                   <>
-                    <Power className="w-4 h-4 mr-2" />
+                    <Power className="w-3 h-3 mr-2" />
                     Connect WhatsApp
                   </>
                 )}
@@ -370,13 +376,13 @@ export default function WhatsAppMonitor() {
 
           {/* Search interface */}
           {isConnected && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
-              className="space-y-4 mt-6 pt-6 border-t border-gray-200 dark:border-gray-700"
+              className="space-y-4 mt-5 pt-5 border-t border-gray-200 dark:border-gray-700"
             >
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Contact/Group Name
                 </label>
                 <input
@@ -384,7 +390,7 @@ export default function WhatsAppMonitor() {
                   value={contactName}
                   onChange={(e) => setContactName(e.target.value)}
                   placeholder="Enter contact or group name"
-                  className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent"
                 />
                 <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   Enter the exact name (e.g., &quot;PraneethTechVector&quot;)
@@ -392,8 +398,8 @@ export default function WhatsAppMonitor() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <Clock className="w-4 h-4 inline mr-1" />
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <Clock className="w-3 h-3 inline mr-1" />
                   Search messages from the last:
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -408,10 +414,10 @@ export default function WhatsAppMonitor() {
                     <button
                       key={option.value}
                       onClick={() => setTimeRange(option.value as 5 | 15 | 30 | 60 | 120 | 360)}
-                      className={`flex-1 min-w-[90px] px-3 py-2 rounded-lg font-medium transition-colors ${
+                      className={`flex-1 min-w-[90px] px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
                         timeRange === option.value
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                          ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
                       }`}
                     >
                       {option.label}
@@ -425,20 +431,20 @@ export default function WhatsAppMonitor() {
                 disabled={searching || !contactName.trim()}
                 whileHover={{ scale: searching ? 1 : 1.02 }}
                 whileTap={{ scale: searching ? 1 : 0.98 }}
-                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors disabled:cursor-not-allowed flex items-center justify-center"
+                className="w-full px-4 py-2.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 dark:disabled:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors disabled:cursor-not-allowed flex items-center justify-center"
               >
                 {searching ? (
                   <>
                     <motion.div
                       animate={{ rotate: 360 }}
                       transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                      className="w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"
+                      className="w-3 h-3 border-2 border-white border-t-transparent rounded-full mr-2"
                     />
                     Searching...
                   </>
                 ) : (
                   <>
-                    <Search className="w-4 h-4 mr-2" />
+                    <Search className="w-3 h-3 mr-2" />
                     Search Messages
                   </>
                 )}
@@ -453,18 +459,19 @@ export default function WhatsAppMonitor() {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="mt-6 p-6 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-center"
+                className="mt-5 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center"
               >
                 <p className="text-sm text-gray-700 dark:text-gray-300 font-medium mb-4">
                   Scan QR Code with WhatsApp
                 </p>
-                <div className="inline-block p-4 bg-white dark:bg-gray-700 rounded-lg">
-                  <img src={qrCode} alt="WhatsApp QR Code" className="w-64 h-64" />
+                <div className="inline-block p-4 bg-white rounded-lg">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={qrCode} alt="WhatsApp QR Code" className="w-56 h-56" />
                 </div>
                 <p className="mt-4 text-xs text-gray-600 dark:text-gray-400">
                   Open WhatsApp → Settings → Linked Devices → Link a Device
                 </p>
-                <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 flex items-center justify-center gap-2">
+                <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 flex items-center justify-center gap-2">
                   <motion.span
                     animate={{ opacity: [1, 0.3, 1] }}
                     transition={{ duration: 2, repeat: Infinity }}
@@ -484,9 +491,9 @@ export default function WhatsAppMonitor() {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="mt-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+                className="mt-5 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
               >
-                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+                <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -499,12 +506,12 @@ export default function WhatsAppMonitor() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
-            <div className="flex items-center justify-between mb-4 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between mb-4 p-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-gray-700 shadow-xl">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white">
                   Found Job Requirements
                 </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                   {messages.length} {messages.length === 1 ? 'opportunity' : 'opportunities'} found
                 </p>
               </div>
@@ -515,20 +522,20 @@ export default function WhatsAppMonitor() {
                   disabled={generatingAll || generatingFor !== null}
                   whileHover={{ scale: generatingAll || generatingFor !== null ? 1 : 1.02 }}
                   whileTap={{ scale: generatingAll || generatingFor !== null ? 1 : 0.98 }}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors disabled:cursor-not-allowed flex items-center"
+                  className="px-4 py-2 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 dark:disabled:bg-gray-700 text-white text-xs font-medium rounded-lg transition-colors disabled:cursor-not-allowed flex items-center"
                 >
                   {generatingAll ? (
                     <>
                       <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                        className="w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"
+                        className="w-3 h-3 border-2 border-white border-t-transparent rounded-full mr-2"
                       />
                       Generating All...
                     </>
                   ) : (
                     <>
-                      <Mail className="w-4 h-4 mr-2" />
+                      <Mail className="w-3 h-3 mr-2" />
                       Generate All Emails
                     </>
                   )}
@@ -542,14 +549,14 @@ export default function WhatsAppMonitor() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6"
+                className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-gray-700 p-5 shadow-xl"
               >
                 {/* Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <MessageSquare className="w-5 h-5 text-gray-400" />
+                    <MessageSquare className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                     <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{msg.sender}</p>
+                      <p className="text-xs font-medium text-gray-900 dark:text-white">{msg.sender}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         {new Date(msg.detectedAt).toLocaleString()}
                       </p>
@@ -557,7 +564,7 @@ export default function WhatsAppMonitor() {
                   </div>
                   
                   {msg.emailSent && (
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800">
                       <Check className="w-3 h-3 mr-1" />
                       Email Sent
                     </span>
@@ -565,7 +572,7 @@ export default function WhatsAppMonitor() {
                 </div>
 
                 {/* Job Description */}
-                <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
                   <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Job Description</p>
                   <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap max-h-48 overflow-y-auto">
                     {msg.message}
@@ -575,7 +582,7 @@ export default function WhatsAppMonitor() {
                 {/* Email Generation Form */}
                 {!msg.generatedEmail && !msg.emailSent && (
                   <div className="border-t border-gray-200 dark:border-gray-700 pt-4 space-y-4">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Personal Information</h3>
+                    <h3 className="text-xs font-semibold text-gray-900 dark:text-white">Personal Information</h3>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
@@ -584,7 +591,7 @@ export default function WhatsAppMonitor() {
                           type="text"
                           value={emailForm.name}
                           onChange={(e) => setEmailForm({ ...emailForm, name: e.target.value })}
-                          className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="w-full px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent"
                         />
                       </div>
                       <div>
@@ -593,7 +600,7 @@ export default function WhatsAppMonitor() {
                           type="email"
                           value={emailForm.email}
                           onChange={(e) => setEmailForm({ ...emailForm, email: e.target.value })}
-                          className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="w-full px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent"
                         />
                       </div>
                       <div>
@@ -602,7 +609,7 @@ export default function WhatsAppMonitor() {
                           type="tel"
                           value={emailForm.phone}
                           onChange={(e) => setEmailForm({ ...emailForm, phone: e.target.value })}
-                          className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="w-full px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent"
                         />
                       </div>
                     </div>
@@ -618,8 +625,8 @@ export default function WhatsAppMonitor() {
                             accept=".pdf,.doc,.docx"
                           />
                           <div className="flex items-center justify-center px-4 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 transition-colors">
-                            <Upload className="w-4 h-4 mr-2 text-gray-500 dark:text-gray-400" />
-                            <span className="text-sm text-gray-600 dark:text-gray-400">
+                            <Upload className="w-3 h-3 mr-2 text-gray-500 dark:text-gray-400" />
+                            <span className="text-xs text-gray-600 dark:text-gray-400">
                               {emailForm.resume ? emailForm.resume.name : 'Upload Resume'}
                             </span>
                           </div>
@@ -627,9 +634,9 @@ export default function WhatsAppMonitor() {
                         {emailForm.resume && (
                           <button
                             onClick={() => setEmailForm({ ...emailForm, resume: null })}
-                            className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                            className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                           >
-                            <X className="w-4 h-4" />
+                            <X className="w-3 h-3" />
                           </button>
                         )}
                       </div>
@@ -640,20 +647,20 @@ export default function WhatsAppMonitor() {
                       disabled={generatingFor === msg.id}
                       whileHover={{ scale: generatingFor === msg.id ? 1 : 1.02 }}
                       whileTap={{ scale: generatingFor === msg.id ? 1 : 0.98 }}
-                      className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors disabled:cursor-not-allowed flex items-center justify-center"
+                      className="w-full px-4 py-2.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 dark:disabled:bg-gray-700 text-white text-xs font-medium rounded-lg transition-colors disabled:cursor-not-allowed flex items-center justify-center"
                     >
                       {generatingFor === msg.id ? (
                         <>
                           <motion.div
                             animate={{ rotate: 360 }}
                             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                            className="w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"
+                            className="w-3 h-3 border-2 border-white border-t-transparent rounded-full mr-2"
                           />
                           Generating Email...
                         </>
                       ) : (
                         <>
-                          <Mail className="w-4 h-4 mr-2" />
+                          <Mail className="w-3 h-3 mr-2" />
                           Generate Email
                         </>
                       )}
@@ -665,10 +672,10 @@ export default function WhatsAppMonitor() {
                 {msg.generatedEmail && !msg.emailSent && (
                   <div className="border-t border-gray-200 dark:border-gray-700 pt-4 space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Generated Email</h3>
+                      <h3 className="text-xs font-semibold text-gray-900 dark:text-white">Generated Email</h3>
                       <button
                         onClick={() => copyEmail(msg)}
-                        className="px-3 py-1 text-xs text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center"
+                        className="px-3 py-1 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center"
                       >
                         {copiedId === msg.id ? (
                           <>
@@ -691,7 +698,7 @@ export default function WhatsAppMonitor() {
                         value={msg.recruiterEmail || ''}
                         onChange={(e) => updateRecipientEmail(msg.id, e.target.value)}
                         placeholder="Enter recipient email"
-                        className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white dark:placeholder-gray-400 focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent"
                       />
                     </div>
 
@@ -701,7 +708,7 @@ export default function WhatsAppMonitor() {
                         type="text"
                         value={msg.generatedEmail.subject}
                         onChange={(e) => updateGeneratedEmail(msg.id, 'subject', e.target.value)}
-                        className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent"
                       />
                     </div>
 
@@ -710,8 +717,8 @@ export default function WhatsAppMonitor() {
                       <textarea
                         value={msg.generatedEmail.body}
                         onChange={(e) => updateGeneratedEmail(msg.id, 'body', e.target.value)}
-                        rows={10}
-                        className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        rows={8}
+                        className="w-full px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent"
                       />
                     </div>
 
@@ -720,20 +727,20 @@ export default function WhatsAppMonitor() {
                       disabled={sendingFor === msg.id || !msg.recruiterEmail?.trim()}
                       whileHover={{ scale: sendingFor === msg.id ? 1 : 1.02 }}
                       whileTap={{ scale: sendingFor === msg.id ? 1 : 0.98 }}
-                      className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors disabled:cursor-not-allowed flex items-center justify-center"
+                      className="w-full px-4 py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 dark:bg-green-700 dark:hover:bg-green-600 dark:disabled:bg-gray-700 text-white text-xs font-medium rounded-lg transition-colors disabled:cursor-not-allowed flex items-center justify-center"
                     >
                       {sendingFor === msg.id ? (
                         <>
                           <motion.div
                             animate={{ rotate: 360 }}
                             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                            className="w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"
+                            className="w-3 h-3 border-2 border-white border-t-transparent rounded-full mr-2"
                           />
                           Sending...
                         </>
                       ) : (
                         <>
-                          <Send className="w-4 h-4 mr-2" />
+                          <Send className="w-3 h-3 mr-2" />
                           Send Email
                         </>
                       )}
