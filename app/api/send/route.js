@@ -81,11 +81,43 @@ For detailed experience and projects, please contact directly.
     }
   });
 
+  // Create HTML email with clickable links
+  const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 20px;
+    }
+    .body-content {
+      white-space: pre-wrap;
+    }
+    a {
+      color: #007bff;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="body-content">${body.replace(/\n/g, '<br>')}</div>
+</body>
+</html>`;
+
   await transporter.sendMail({
     from: `${fromName} <${process.env.GMAIL_USER}>`,
     to,
     subject,
-    text: body,
+    text: body,  // Plain text fallback
+    html: htmlBody,  // HTML version with clickable links
     attachments: [
       {
         filename: filename,

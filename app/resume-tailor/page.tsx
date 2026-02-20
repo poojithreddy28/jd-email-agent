@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Upload, Copy, Check, Briefcase, UserCircle } from 'lucide-react';
+import { FileText, Upload, Copy, Check, Briefcase, UserCircle, Edit3, Download } from 'lucide-react';
 
 interface ResumeOutput {
   summary: string | string[];
@@ -26,6 +26,17 @@ export default function ResumeTailor() {
   const [generationTime, setGenerationTime] = useState<string | null>(null);
   const [pdfFilename, setPdfFilename] = useState<string>('PoojithResume.docx');
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editableHtml, setEditableHtml] = useState<string>('');
+  const [downloadFormat, setDownloadFormat] = useState<'pdf' | 'docx'>('docx');
+  const [roleName, setRoleName] = useState<string>('Position');
+  const [hasEdits, setHasEdits] = useState(false);
+  
+  // User credentials (defaults to Poojith's info)
+  const [userName, setUserName] = useState('Poojith Reddy A');
+  const [userEmail, setUserEmail] = useState('poojithreddy.se@gmail.com');
+  const [userPhone, setUserPhone] = useState('312-536-9779');
+  const [userLinkedIn, setUserLinkedIn] = useState('https://www.linkedin.com/in/poojith-reddy-com/');
 
   // Clear file when switching to DOCX mode
   useEffect(() => {
@@ -81,11 +92,16 @@ export default function ResumeTailor() {
     setHtmlPreview(null);
     setDocxBase64(null);
     setGenerationTime(null);
+    setHasEdits(false);
 
     try {
       const formData = new FormData();
       formData.append('jobDescription', jobDescription);
       formData.append('mode', mode);
+      formData.append('userName', userName);
+      formData.append('userEmail', userEmail);
+      formData.append('userPhone', userPhone);
+      formData.append('userLinkedIn', userLinkedIn);
       
       // Only send file in text mode, only send text for DOCX mode if provided
       if (outputMode === 'pdf') {
@@ -122,7 +138,7 @@ export default function ResumeTailor() {
         setGenerationTime(data.generationTime);
         
         // Extract job role from JD for filename
-        const roleMatch = jobDescription.match(/(?:position|role|title|hiring|for|developer|engineer)\s*:?\s*([^\n,.!?]{3,50})/i);
+        const roleMatch = jobDescription.match(/(?:position|role|title|hiring|for|developer|engineer|looking for|seeking)\s*:?\s*([^\n,.!?]{3,50})/i);
         let role = 'Position';
         if (roleMatch) {
           role = roleMatch[1].trim()
@@ -131,8 +147,10 @@ export default function ResumeTailor() {
             .replace(/\s+/g, '_')
             .substring(0, 30);
         }
-        const filename = `PoojithResume_${role}.docx`;
-        setPdfFilename(filename);
+        setRoleName(role);
+        const docxFilename = `Poojith_Reddy_${role}.docx`;
+        const pdfFilenameStr = `Poojith_Reddy_${role}.pdf`;
+        setPdfFilename(downloadFormat === 'pdf' ? pdfFilenameStr : docxFilename);
       } else {
         // Handle text response
         const data = await response.json();
@@ -140,6 +158,37 @@ export default function ResumeTailor() {
       }
     } catch (err) {
       setError('Error generating resume: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fast test mode for quick formatting validation (completes in under 5 seconds)
+  const testFormatting = async () => {
+    setLoading(true);
+    setError('');
+    setOutput(null);
+    setHtmlPreview(null);
+    setDocxBase64(null);
+    setGenerationTime(null);
+    setHasEdits(false);
+
+    try {
+      const response = await fetch('/api/test-resume-format', { method: 'POST' });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Test mode failed');
+      }
+
+      const data = await response.json();
+      setHtmlPreview(data.htmlPreview);
+      setDocxBase64(data.docxBase64);
+      setGenerationTime(data.generationTime);
+      setPdfFilename('TestResume_Format_Validation.docx');
+      setRoleName('TestFormat');
+    } catch (err) {
+      setError('Test mode error: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -184,7 +233,47 @@ export default function ResumeTailor() {
     setTimeout(() => setCopiedSection(null), 2000);
   };
 
-  const downloadDocx = () => {
+  const downloadDocx = async () => {
+    // Use first name from userName for filename
+    const firstName = userName.split(' ')[0] || 'Resume';
+    const filename = `${firstName}_${roleName}.docx`;
+    
+    // If user made edits, convert edited HTML to DOCX
+    if (hasEdits && htmlPreview) {
+      try {
+        // Dynamically import html-docx library (client-side only)
+        const htmlDocx = (await import('html-docx-js-typescript')).default;
+        
+        // Convert HTML to DOCX (async operation)
+        const converted = await htmlDocx.asBlob(htmlPreview);
+        
+        // Ensure we have a Blob (convert Buffer if needed)
+        let blob: Blob;
+        if (converted instanceof Blob) {
+          blob = converted;
+        } else {
+          // Convert Buffer to Uint8Array then to Blob
+          const uint8Array = new Uint8Array(converted.buffer as ArrayBuffer);
+          blob = new Blob([uint8Array], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        }
+        
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error('Error converting edited HTML to DOCX:', error);
+        alert('Failed to generate DOCX from edited content. Please try PDF format.');
+      }
+      return;
+    }
+    
+    // Otherwise, use original base64 DOCX
     if (!docxBase64) return;
     
     // Convert base64 to blob
@@ -200,11 +289,70 @@ export default function ResumeTailor() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = pdfFilename;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const downloadAsPDF = async () => {
+    if (!htmlPreview) return;
+
+    // Use first name from userName for filename
+    const firstName = userName.split(' ')[0] || 'Resume';
+    const filename = `${firstName}_${roleName}.pdf`;
+    
+    try {
+      // Dynamically import html2pdf (client-side only)
+      const html2pdf = (await import('html2pdf.js')).default;
+      
+      // Create a temporary container for the HTML
+      const element = document.createElement('div');
+      element.innerHTML = htmlPreview;
+      element.style.width = '8.5in';
+      element.style.padding = '0.5in';
+      element.style.backgroundColor = 'white';
+      
+      const opt = {
+        margin: 0.5,
+        filename: filename,
+        image: { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'in' as const, format: 'letter' as const, orientation: 'portrait' as const }
+      };
+
+      await html2pdf().set(opt).from(element).save();
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      alert('Failed to generate PDF. Please try downloading as DOCX instead.');
+    }
+  };
+
+  const handleDownload = async () => {
+    if (downloadFormat === 'pdf') {
+      await downloadAsPDF();
+    } else {
+      await downloadDocx();
+    }
+  };
+
+  const handleEditMode = () => {
+    if (!isEditMode) {
+      setEditableHtml(htmlPreview || '');
+    }
+    setIsEditMode(!isEditMode);
+  };
+
+  const handleSaveEdits = () => {
+    setHtmlPreview(editableHtml);
+    setHasEdits(true);
+    setIsEditMode(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditableHtml(htmlPreview || '');
+    setIsEditMode(false);
   };
 
   return (
@@ -303,6 +451,48 @@ export default function ResumeTailor() {
             />
           </div>
 
+          {/* User Credentials - shown only in DOCX mode */}
+          {outputMode === 'pdf' && (
+            <div className="mb-8">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Your Information</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <input
+                  type="text"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  className="px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
+                  placeholder="Full Name"
+                />
+                <input
+                  type="email"
+                  value={userEmail}
+                  onChange={(e) => setUserEmail(e.target.value)}
+                  className="px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
+                  placeholder="Email"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input
+                  type="tel"
+                  value={userPhone}
+                  onChange={(e) => setUserPhone(e.target.value)}
+                  className="px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
+                  placeholder="Phone Number"
+                />
+                <input
+                  type="url"
+                  value={userLinkedIn}
+                  onChange={(e) => setUserLinkedIn(e.target.value)}
+                  className="px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
+                  placeholder="LinkedIn Profile URL"
+                />
+              </div>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                💡 Your contact information will be used in the generated resume header
+              </p>
+            </div>
+          )}
+
           {/* Resume Input */}
           <div className="mb-8">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Your Resume</label>
@@ -372,29 +562,44 @@ export default function ResumeTailor() {
           </AnimatePresence>
 
           {/* Generate Button */}
-          <motion.button
-            onClick={generateResume}
-            disabled={loading}
-            whileHover={{ scale: loading ? 1 : 1.02 }}
-            whileTap={{ scale: loading ? 1 : 0.98 }}
-            className="w-full py-4 bg-gray-900 dark:bg-gray-700 hover:bg-black dark:hover:bg-gray-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white font-medium rounded-lg transition-all disabled:cursor-not-allowed flex items-center justify-center"
-          >
-            {loading ? (
-              <>
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                  className="w-5 h-5 border-2 border-white border-t-transparent rounded-full mr-3"
-                />
-                Generating...
-              </>
-            ) : (
-              <>
-                <Upload className="w-5 h-5 mr-2" />
-                Generate Resume
-              </>
+          <div className="space-y-3">
+            <motion.button
+              onClick={generateResume}
+              disabled={loading}
+              whileHover={{ scale: loading ? 1 : 1.02 }}
+              whileTap={{ scale: loading ? 1 : 0.98 }}
+              className="w-full py-4 bg-gray-900 dark:bg-gray-700 hover:bg-black dark:hover:bg-gray-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white font-medium rounded-lg transition-all disabled:cursor-not-allowed flex items-center justify-center"
+            >
+              {loading ? (
+                <>
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    className="w-5 h-5 border-2 border-white border-t-transparent rounded-full mr-3"
+                  />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-5 h-5 mr-2" />
+                  Generate Resume
+                </>
+              )}
+            </motion.button>
+
+            {/* Test Formatting Button - Fast validation mode */}
+            {outputMode === 'pdf' && (
+              <motion.button
+                onClick={testFormatting}
+                disabled={loading}
+                whileHover={{ scale: loading ? 1 : 1.02 }}
+                whileTap={{ scale: loading ? 1 : 0.98 }}
+                className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white font-medium rounded-lg transition-all disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                🧪 Test Formatting (Fast - Under 5 sec)
+              </motion.button>
             )}
-          </motion.button>
+          </div>
         </motion.div>
 
         {/* Output */}
@@ -566,44 +771,140 @@ export default function ResumeTailor() {
                   <div>
                     <p className="font-semibold text-green-900 dark:text-green-100">Resume Generated Successfully!</p>
                     <p className="text-sm text-green-700 dark:text-green-300">
-                      Generated in {generationTime} • Preview below and download when ready
+                      Generated in {generationTime} • {
+                        hasEdits 
+                          ? '✏️ Edits will be applied to downloads' 
+                          : isEditMode 
+                            ? 'Edit mode active' 
+                            : 'Preview below and download when ready'
+                      }
                     </p>
                   </div>
                 </div>
-                <motion.button
-                  onClick={downloadDocx}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <FileText className="w-4 h-4" />
-                  Download DOCX
-                </motion.button>
+                <div className="flex gap-2">
+                  {!isEditMode && (
+                    <motion.button
+                      onClick={handleEditMode}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                      Edit Content
+                    </motion.button>
+                  )}
+                  <motion.button
+                    onClick={handleDownload}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download {downloadFormat.toUpperCase()}
+                  </motion.button>
+                </div>
               </div>
 
-              {/* Preview iframe */}
+              {/* Format Selector */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Download Format</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Choose your preferred file format</p>
+                  </div>
+                  <div className="flex gap-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
+                    <button
+                      onClick={() => setDownloadFormat('docx')}
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                        downloadFormat === 'docx'
+                          ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4" />
+                        DOCX
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setDownloadFormat('pdf')}
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                        downloadFormat === 'pdf'
+                          ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4" />
+                        PDF
+                      </div>
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-3 text-xs text-gray-600 dark:text-gray-400">
+                  📄 <strong>Filename:</strong> Poojith_Reddy_{roleName}.{downloadFormat}
+                </div>
+              </div>
+
+              {/* Preview or Edit Mode */}
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="bg-gray-100 dark:bg-gray-700 px-4 py-3 border-b border-gray-200 dark:border-gray-600">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">📄 Preview - {pdfFilename}</p>
+                <div className="bg-gray-100 dark:bg-gray-700 px-4 py-3 border-b border-gray-200 dark:border-gray-600 flex items-center justify-between">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {isEditMode ? '✏️ Edit Mode - Fix typos, spacing, or content' : `📄 Preview - Poojith_Reddy_${roleName}.${downloadFormat}`}
+                  </p>
+                  {isEditMode && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveEdits}
+                        className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
+                      >
+                        Save Changes
+                      </button>
+                      <button
+                        onClick={handleCancelEdit}
+                        className="px-4 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="p-6 max-h-[600px] overflow-y-auto">
-                  <iframe
-                    srcDoc={htmlPreview}
-                    title="Resume Preview"
-                    className="w-full min-h-[800px] border-0"
-                    style={{ backgroundColor: 'white' }}
-                  />
+                  {isEditMode ? (
+                    <div className="space-y-3">
+                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                        <p className="text-sm text-blue-800 dark:text-blue-300">
+                          <strong>💡 Edit Mode:</strong> You can edit the HTML content below to fix typos, spacing, or adjust any text. 
+                          <br />
+                          <strong>Note:</strong> Edits only update the preview and PDF downloads. To edit the DOCX file, you'll need to open it in Word after downloading.
+                        </p>
+                      </div>
+                      <textarea
+                        value={editableHtml}
+                        onChange={(e) => setEditableHtml(e.target.value)}
+                        className="w-full h-[500px] p-4 font-mono text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-900 dark:text-gray-300"
+                        spellCheck={false}
+                      />
+                    </div>
+                  ) : (
+                    <iframe
+                      srcDoc={htmlPreview}
+                      title="Resume Preview"
+                      className="w-full min-h-[800px] border-0"
+                      style={{ backgroundColor: 'white' }}
+                    />
+                  )}
                 </div>
               </div>
 
               {/* Action Buttons */}
               <div className="flex gap-4 justify-center">
                 <button
-                  onClick={downloadDocx}
+                  onClick={handleDownload}
                   className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
                 >
-                  <FileText className="w-4 h-4" />
-                  Download DOCX
+                  <Download className="w-4 h-4" />
+                  Download {downloadFormat.toUpperCase()}
                 </button>
                 <button
                   onClick={() => {

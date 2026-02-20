@@ -90,7 +90,7 @@ Return ONLY valid JSON with keys: subject, body, recipientEmail
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "llama3",
+        model: "llama3:latest",
         prompt,
         stream: false,
       }),
