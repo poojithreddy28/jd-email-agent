@@ -1,13 +1,20 @@
 "use client";
  
 import { SunIcon as Sunburst } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from '../ThemeProvider';
 
 // Animated gradient background component
 const GradientBackground = () => {
   const { theme } = useTheme();
-  const isDark = theme === 'dark';
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  
+  // Use light theme as default during SSR to match initial state
+  const isDark = mounted ? theme === 'dark' : false;
   
   return (
   <>
