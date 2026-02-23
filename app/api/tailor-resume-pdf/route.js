@@ -3,6 +3,7 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Unde
 import fs from 'fs';
 import path from 'path';
 import mammoth from 'mammoth';
+import { generateLLM, getLLMConfig } from '@/lib/llmProvider.js';
 
 const TEMP_DIR = path.join(process.cwd(), 'temp');
 
@@ -414,23 +415,14 @@ FINAL REMINDERS
 Now generate the resume. Return ONLY valid JSON, no explanations:`;
 
   try {
-    const response = await fetch('http://localhost:11434/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'llama3:latest',
-        prompt: prompt,
-        stream: false,
-        options: {
-          temperature: 0.8,  // Slightly higher for more detailed/creative bullets
-          num_predict: 20000,  // Increased for 8-10 detailed bullets per company (150-200 chars each)
-          num_ctx: 20480,  // Larger context window for comprehensive output
-          stop: []  // Don't stop early
-        }
-      })
+    console.log(`🤖 LLM Provider: ${getLLMConfig().provider.toUpperCase()} (${getLLMConfig().model})`);
+    
+    const data = await generateLLM({
+      prompt: prompt,
+      temperature: 0.8,  // Slightly higher for more detailed/creative bullets
+      num_predict: 20000,  // Increased for 8-10 detailed bullets per company (150-200 chars each)
+      num_ctx: 20480  // Larger context window for comprehensive output
     });
-
-    const data = await response.json();
     let parsedData;
     let cleanResponse = '';  // Declare outside try block for error logging
     
@@ -558,22 +550,12 @@ TASK: Generate ${needed} MORE bullets (150-200 chars each) that:
 Return ONLY the new bullet points, one per line, without numbers or bullet symbols.`;
 
           try {
-            const expansionResponse = await fetch('http://localhost:11434/api/generate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                model: 'llama3:latest',
-                prompt: expansionPrompt,
-                stream: false,
-                options: {
-                  temperature: 0.8,  // Slightly higher for creativity
-                  num_predict: 2000,
-                  num_ctx: 8192
-                }
-              })
+            const expansionData = await generateLLM({
+              prompt: expansionPrompt,
+              temperature: 0.8,  // Slightly higher for creativity
+              num_predict: 2000,
+              num_ctx: 8192
             });
-            
-            const expansionData = await expansionResponse.json();
             const newBullets = expansionData.response.trim().split('\n')
               .filter(line => line.trim().length > 50)  // Filter out short/empty lines
               .map(line => line.trim().replace(/^[-•*]\s*/, ''))  // Remove bullet symbols
@@ -818,17 +800,10 @@ Generate a PROFESSIONAL SUMMARY with 6-8 bullet points that:
 
 Return ONLY the bullet points, one per line, without bullet symbols.`;
 
-  const summaryResponse = await fetch('http://localhost:11434/api/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'llama3:latest',
-      prompt: summaryPrompt,
-      stream: false
-    })
+  const summaryData = await generateLLM({
+    prompt: summaryPrompt,
+    temperature: 0.8
   });
-  
-  const summaryData = await summaryResponse.json();
   const summaryPoints = summaryData.response.trim().split('\n').filter(l => l.trim().length > 0);
   console.log(`   ✅ Generated ${summaryPoints.length} summary points`);
   
@@ -855,17 +830,10 @@ Generate 5-6 achievement bullet points that:
 
 Return ONLY the bullet points, one per line, without bullet symbols.`;
 
-    const bulletResponse = await fetch('http://localhost:11434/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'llama3:latest',
-        prompt: bulletPrompt,
-        stream: false
-      })
+    const bulletData = await generateLLM({
+      prompt: bulletPrompt,
+      temperature: 0.8
     });
-    
-    const bulletData = await bulletResponse.json();
     const bulletPoints = bulletData.response.trim().split('\n').filter(l => l.trim().length > 0);
     
     tailoredCompanies.push({
@@ -897,17 +865,10 @@ Category Name: skill1, skill2, skill3
 
 Do NOT include explanations, just the category:skills format.`;
 
-  const skillsResponse = await fetch('http://localhost:11434/api/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'llama3:latest',
-      prompt: skillsPrompt,
-      stream: false
-    })
+  const skillsData = await generateLLM({
+    prompt: skillsPrompt,
+    temperature: 0.8
   });
-  
-  const skillsData = await skillsResponse.json();
   const skillsText = skillsData.response.trim();
   
   // Parse AI-generated skills into object
