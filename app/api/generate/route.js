@@ -1,3 +1,16 @@
+/**
+ * Sanitize JSON string by escaping literal control characters
+ * Only used as fallback when initial parse fails
+ */
+function sanitizeJSON(jsonStr) {
+  // Simple approach: replace literal control characters with escaped versions
+  return jsonStr
+    .replace(/\r\n/g, '\\n')  // Windows line endings
+    .replace(/\n/g, '\\n')     // Unix line endings  
+    .replace(/\r/g, '\\r')     // Mac line endings
+    .replace(/\t/g, '\\t');    // Tabs
+}
+
 export async function POST(req) {
   // Check content type to determine how to parse the request
   const contentType = req.headers.get('content-type') || '';
@@ -82,7 +95,10 @@ Subject rules:
 - Use this format: "Application for {Role} - {Location}"
 - If no location is found, use: "Application for {Role}"
 
-Return ONLY valid JSON with keys: subject, body, recipientEmail
+Return ONLY valid JSON (no extra text). Format:
+{"subject":"...","body":"... (use \\n for line breaks, not literal newlines)","recipientEmail":"..."}
+
+Example: {"subject":"Application for Senior Java Developer - Remote","body":"Hi John,\\nI am excited to apply...\\n\\nBest regards","recipientEmail":"contact@example.com"}
 `;
 
   try {
@@ -111,11 +127,27 @@ Return ONLY valid JSON with keys: subject, body, recipientEmail
     const jsonEnd = data.response.lastIndexOf("}");
     
     if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-      const jsonPart = data.response.slice(jsonStart, jsonEnd + 1);
-      parsed = JSON.parse(jsonPart);
+      let jsonPart = data.response.slice(jsonStart, jsonEnd + 1);
+      
+      // Try parsing first without sanitization (LLM should output valid JSON)
+      try {
+        parsed = JSON.parse(jsonPart);
+      } catch (firstError) {
+        // If that fails, try sanitizing literal control characters
+        console.log('First parse failed, trying with sanitization...');
+        jsonPart = sanitizeJSON(jsonPart);
+        parsed = JSON.parse(jsonPart);
+      }
     } else {
       // If no JSON brackets found, try parsing the whole response
-      parsed = JSON.parse(data.response.trim());
+      let cleanResponse = data.response.trim();
+      try {
+        parsed = JSON.parse(cleanResponse);
+      } catch (firstError) {
+        console.log('First parse failed, trying with sanitization...');
+        cleanResponse = sanitizeJSON(cleanResponse);
+        parsed = JSON.parse(cleanResponse);
+      }
     }
   } catch (e) {
     console.error('JSON parse failed:', e);

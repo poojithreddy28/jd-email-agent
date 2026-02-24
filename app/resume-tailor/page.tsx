@@ -1,7 +1,7 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Upload, Copy, Check, Briefcase, UserCircle, Edit3, Download } from 'lucide-react';
+import { FileText, Upload, Check, Briefcase, UserCircle, Edit3, Download } from 'lucide-react';
 import { GradientBackground } from '@/components/GradientBackground';
 
 interface ResumeOutput {
@@ -18,14 +18,12 @@ export default function ResumeTailor() {
   const [resumeText, setResumeText] = useState('');
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [mode, setMode] = useState<'fulltime' | 'ctoc'>('fulltime');
-  const [outputMode, setOutputMode] = useState<'text' | 'pdf'>('text');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [output, setOutput] = useState<ResumeOutput | null>(null);
   const [htmlPreview, setHtmlPreview] = useState<string | null>(null);
   const [docxBase64, setDocxBase64] = useState<string | null>(null);
   const [generationTime, setGenerationTime] = useState<string | null>(null);
-  const [copiedSection, setCopiedSection] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editableHtml, setEditableHtml] = useState<string>('');
   const [downloadFormat, setDownloadFormat] = useState<'pdf' | 'docx'>('docx');
@@ -38,23 +36,9 @@ export default function ResumeTailor() {
   const [userPhone, setUserPhone] = useState('312-536-9779');
   const [userLinkedIn, setUserLinkedIn] = useState('https://www.linkedin.com/in/poojith-reddy-com/');
 
-  // Clear file when switching to DOCX mode
-  useEffect(() => {
-    if (outputMode === 'pdf' && resumeFile) {
-      setResumeFile(null);
-      setError('');
-    }
-  }, [outputMode, resumeFile]);
-
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (outputMode === 'pdf') {
-      setError('File upload is not available in DOCX mode. Please paste your resume text below.');
-      e.target.value = '';
-      return;
-    }
 
     if (!file.name.match(/\.(pdf|docx?)$/i)) {
       setError('Please upload a PDF or DOCX file');
@@ -72,19 +56,8 @@ export default function ResumeTailor() {
       return;
     }
 
-    // Validation based on output mode
-    if (outputMode === 'pdf') {
-      // Resume is optional in DOCX mode - will use default if not provided
-      if (resumeText.trim()) {
-        // User provided text, validate it's not empty
-      }
-      // If no resume text, default resume will be used automatically
-    } else {
-      if (!resumeText.trim() && !resumeFile) {
-        setError('Please paste your resume or upload a file');
-        return;
-      }
-    }
+    // Resume is optional - will use default if not provided
+    // User can provide text or file, or leave empty for default resume
 
     setLoading(true);
     setError('');
@@ -103,22 +76,16 @@ export default function ResumeTailor() {
       formData.append('userPhone', userPhone);
       formData.append('userLinkedIn', userLinkedIn);
       
-      // Only send file in text mode, only send text for DOCX mode if provided
-      if (outputMode === 'pdf') {
-        if (resumeText.trim()) {
-          formData.append('resumeText', resumeText);
-        }
-        // If no resume text, backend will use default resume
-      } else {
-        if (resumeFile) {
-          formData.append('resumeFile', resumeFile);
-        } else if (resumeText) {
-          formData.append('resumeText', resumeText);
-        }
+      // Send resume file or text if provided
+      if (resumeFile) {
+        formData.append('resumeFile', resumeFile);
+      } else if (resumeText.trim()) {
+        formData.append('resumeText', resumeText);
       }
+      // If no resume provided, backend will use default resume
 
-      // Choose API endpoint based on output mode
-      const endpoint = outputMode === 'pdf' ? '/api/tailor-resume-pdf' : '/api/tailor-resume';
+      // Always use DOCX API endpoint
+      const endpoint = '/api/tailor-resume-pdf';
       
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -130,30 +97,23 @@ export default function ResumeTailor() {
         throw new Error(errorData.error || 'Failed to generate resume');
       }
 
-      if (outputMode === 'pdf') {
-        // Handle DOCX JSON response with preview
-        const data = await response.json();
-        setHtmlPreview(data.htmlPreview);
-        setDocxBase64(data.docxBase64);
-        setGenerationTime(data.generationTime);
-        
-        // Extract job role from JD for filename
-        const roleMatch = jobDescription.match(/(?:position|role|title|hiring|for|developer|engineer|looking for|seeking)\s*:?\s*([^\n,.!?]{3,50})/i);
-        let role = 'Position';
-        if (roleMatch) {
-          role = roleMatch[1].trim()
-            .replace(/^(a|an|the)\s+/i, '')
-            .replace(/[^a-zA-Z0-9\s]/g, '')
-            .replace(/\s+/g, '_')
-            .substring(0, 30);
-        }
-        setRoleName(role);
-        // Filename format: Poojith_Reddy_<Role>.docx or .pdf
-      } else {
-        // Handle text response
-        const data = await response.json();
-        setOutput(data);
+      // Handle DOCX JSON response with preview
+      const data = await response.json();
+      setHtmlPreview(data.htmlPreview);
+      setDocxBase64(data.docxBase64);
+      setGenerationTime(data.generationTime);
+      
+      // Extract job role from JD for filename
+      const roleMatch = jobDescription.match(/(?:position|role|title|hiring|for|developer|engineer|looking for|seeking)\s*:?\s*([^\n,.!?]{3,50})/i);
+      let role = 'Position';
+      if (roleMatch) {
+        role = roleMatch[1].trim()
+          .replace(/^(a|an|the)\s+/i, '')
+          .replace(/[^a-zA-Z0-9\s]/g, '')
+          .replace(/\s+/g, '_')
+          .substring(0, 30);
       }
+      setRoleName(role);
     } catch (err) {
       setError('Error generating resume: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
@@ -189,45 +149,6 @@ export default function ResumeTailor() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const copySection = (section: 'summary' | 'experience', companyIndex?: number) => {
-    if (!output) return;
-
-    let text = '';
-    const sectionKey = section + (companyIndex !== undefined ? companyIndex : '');
-    
-    if (section === 'summary') {
-      text = Array.isArray(output.summary) 
-        ? output.summary.map((s, i) => `${i + 1}. ${s}`).join('\n\n')
-        : output.summary;
-    } else if (section === 'experience' && companyIndex !== undefined) {
-      const exp = output.experience[companyIndex];
-      const productsLine = exp.products ? `Products: ${exp.products}\n\n` : '';
-      text = `${exp.company}\n${productsLine}\n${exp.bullets.map((b) => `• ${b}`).join('\n\n')}`;
-    }
-
-    navigator.clipboard.writeText(text);
-    setCopiedSection(sectionKey);
-    setTimeout(() => setCopiedSection(null), 2000);
-  };
-
-  const copyAll = () => {
-    if (!output) return;
-
-    const summaryText = Array.isArray(output.summary) 
-      ? output.summary.map((s, i) => `${i + 1}. ${s}`).join('\n\n')
-      : output.summary;
-
-    const experienceText = output.experience.map(exp => {
-      const productsLine = exp.products ? `Products: ${exp.products}\n\n` : '';
-      return `${exp.company}\n${productsLine}\n${exp.bullets.map(b => `• ${b}`).join('\n\n')}`;
-    }).join('\n\n---\n\n');
-
-    const fullText = `SUMMARY\n\n${summaryText}\n\n\nEXPERIENCE\n\n${experienceText}`;
-    navigator.clipboard.writeText(fullText);
-    setCopiedSection('all');
-    setTimeout(() => setCopiedSection(null), 2000);
   };
 
   const downloadDocx = async () => {
@@ -407,40 +328,6 @@ export default function ResumeTailor() {
             </div>
           </div>
 
-          {/* Output Mode Toggle */}
-          <div className="mb-6">
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Output Format</label>
-            <div className="inline-flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-              <button
-                onClick={() => setOutputMode('text')}
-                className={`px-6 py-2 rounded-md text-xs font-medium transition-all flex items-center gap-2 ${
-                  outputMode === 'text'
-                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                <FileText className="w-3 h-3" />
-                Text View
-              </button>
-              <button
-                onClick={() => setOutputMode('pdf')}
-                className={`px-6 py-2 rounded-md text-xs font-medium transition-all flex items-center gap-2 ${
-                  outputMode === 'pdf'
-                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                <FileText className="w-3 h-3" />
-                DOCX Download
-              </button>
-            </div>
-            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              {outputMode === 'pdf' 
-                ? '📄 Generates a formatted Word document (DOCX) with 30 summary bullets, 30 bullets for first client, and 30 for second client. Shows generation time. Recommended: Paste resume text for best results.'
-                : '📝 Displays text output for easy copying and editing. Supports file uploads (PDF/DOCX)'}
-            </p>
-          </div>
-
           {/* Job Description */}
           <div className="mb-6">
             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Job Description</label>
@@ -453,9 +340,8 @@ export default function ResumeTailor() {
             />
           </div>
 
-          {/* User Credentials - shown only in DOCX mode */}
-          {outputMode === 'pdf' && (
-            <div className="mb-6">
+          {/* User Credentials - COMMENTED OUT FOR MAIN USER FLOW */}
+          {/* <div className="mb-6">
               <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Your Information</label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <input
@@ -492,20 +378,17 @@ export default function ResumeTailor() {
               <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                 💡 Your contact information will be used in the generated resume header
               </p>
-            </div>
-          )}
+          </div> */}
 
           {/* Resume Input */}
           <div className="mb-6">
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Your Resume</label>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Your Resume (Optional)</label>
             
-            {outputMode === 'pdf' && (
-              <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                <p className="text-xs text-gray-700 dark:text-gray-300">
-                  💡 For DOCX output mode, we recommend pasting your resume text below for best results. Generation time will be displayed after download.
-                </p>
-              </div>
-            )}
+            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+              <p className="text-xs text-gray-700 dark:text-gray-300">
+                💡 Upload a PDF/DOCX file or paste resume text. If no resume is provided, a default resume will be used. Supports PDF extraction with proper formatting.
+              </p>
+            </div>
             
             {/* File Upload */}
             <div className="mb-4">
@@ -514,8 +397,7 @@ export default function ResumeTailor() {
                   type="file"
                   accept=".pdf,.docx,.doc"
                   onChange={handleFileUpload}
-                  disabled={outputMode === 'pdf'}
-                  className="w-full text-xs text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-gray-900 dark:file:bg-white file:text-white dark:file:text-gray-900 hover:file:bg-gray-800 dark:hover:file:bg-gray-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full text-xs text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-gray-900 dark:file:bg-white file:text-white dark:file:text-gray-900 hover:file:bg-gray-800 dark:hover:file:bg-gray-100 transition-all"
                 />
                 {resumeFile && (
                   <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 flex items-center">
@@ -590,175 +472,22 @@ export default function ResumeTailor() {
             </motion.button>
 
             {/* Test Formatting Button - Fast validation mode */}
-            {outputMode === 'pdf' && (
-              <motion.button
-                onClick={testFormatting}
-                disabled={loading}
-                whileHover={{ scale: loading ? 1 : 1.02 }}
-                whileTap={{ scale: loading ? 1 : 0.98 }}
-                className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white text-sm font-medium rounded-lg transition-all disabled:cursor-not-allowed flex items-center justify-center"
-              >
-                🧪 Test Formatting (Fast - Under 5 sec)
-              </motion.button>
-            )}
+            <motion.button
+              onClick={testFormatting}
+              disabled={loading}
+              whileHover={{ scale: loading ? 1 : 1.02 }}
+              whileTap={{ scale: loading ? 1 : 0.98 }}
+              className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white text-sm font-medium rounded-lg transition-all disabled:cursor-not-allowed flex items-center justify-center"
+            >
+              🧪 Test Formatting (Fast - Under 5 sec)
+            </motion.button>
           </div>
         </motion.div>
 
         {/* Output */}
         <AnimatePresence>
-          {output && outputMode === 'text' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
-            >
-              {/* Copy All Button */}
-              <div className="flex justify-end">
-                <motion.button
-                  onClick={copyAll}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="px-5 py-2.5 bg-gray-900 dark:bg-white hover:bg-black dark:hover:bg-gray-100 text-white dark:text-gray-900 text-sm font-medium rounded-lg transition-all flex items-center"
-                >
-                  {copiedSection === 'all' ? (
-                    <>
-                      <Check className="w-3 h-3 mr-2" />
-                      Copied All
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3 h-3 mr-2" />
-                      Copy All
-                    </>
-                  )}
-                </motion.button>
-              </div>
-
-              {/* Summary */}
-              <motion.div 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-gray-700 p-6 shadow-xl hover:shadow-2xl transition-shadow"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                    Summary ({Array.isArray(output.summary) ? output.summary.length : 1} points)
-                  </h2>
-                  <motion.button
-                    onClick={() => copySection('summary')}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg transition-colors flex items-center"
-                  >
-                    {copiedSection === 'summary' ? (
-                      <>
-                        <Check className="w-3 h-3 mr-2" />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3 h-3 mr-2" />
-                        Copy
-                      </>
-                    )}
-                  </motion.button>
-                </div>
-
-                <div className="space-y-4">
-                  {Array.isArray(output.summary) ? (
-                    output.summary.map((point, i) => (
-                      <motion.div
-                        key={i}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ 
-                          type: 'spring',
-                          stiffness: 500,
-                          damping: 30,
-                          delay: i * 0.03
-                        }}
-                        className="flex gap-3"
-                      >
-                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400 mt-0.5">{i + 1}.</span>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{point}</p>
-                      </motion.div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{output.summary}</p>
-                  )}
-                </div>
-              </motion.div>
-
-              {/* Experience */}
-              {output.experience.map((exp, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 25, delay: 0.2 + index * 0.1 }}
-                  whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                  className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-gray-700 p-6 shadow-xl hover:shadow-2xl transition-shadow"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">{exp.company}</h3>
-                      {exp.products && (
-                        <p className="text-xs text-gray-600 dark:text-gray-400 italic">Products: {exp.products}</p>
-                      )}
-                    </div>
-                    <motion.button
-                      onClick={() => copySection('experience', index)}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg transition-colors flex items-center"
-                    >
-                      {copiedSection === `experience${index}` ? (
-                        <>
-                          <Check className="w-3 h-3 mr-2" />
-                          Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3 h-3 mr-2" />
-                          Copy
-                        </>
-                      )}
-                    </motion.button>
-                  </div>
-
-                  <div className="space-y-4">
-                    {exp.bullets.map((bullet, i) => (
-                      <motion.div
-                        key={i}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: i * 0.03 }}
-                        className="flex gap-3"
-                      >
-                        <span className="text-gray-400 dark:text-gray-500 mt-1">•</span>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{bullet}</p>
-                      </motion.div>
-                    ))}
-                  </div>
-                </motion.div>
-              ))}
-
-              {/* Reset Button */}
-              <div className="text-center pt-4">
-                <button
-                  onClick={() => setOutput(null)}
-                  className="px-5 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg transition-colors"
-                >
-                  Generate New Resume
-                </button>
-              </div>
-            </motion.div>
-          )}
-          
           {/* DOCX Preview */}
-          {htmlPreview && outputMode === 'pdf' && (
+          {htmlPreview && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -890,7 +619,7 @@ export default function ResumeTailor() {
                     </div>
                   ) : (
                     <iframe
-                      srcDoc={htmlPreview}
+                      srcDoc={htmlPreview || undefined}
                       title="Resume Preview"
                       className="w-full min-h-[800px] border-0"
                       style={{ backgroundColor: 'white' }}

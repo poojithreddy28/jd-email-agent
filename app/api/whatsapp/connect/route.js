@@ -9,8 +9,83 @@ let qrCodeData = null;
 let isReady = false;
 let isInitializing = false;
 
+// Clean up any orphaned browser processes and sessions on server restart
+// This handles cases where the server restarts but browser processes remain
+const startupCleanup = async () => {
+  try {
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+    
+    // Kill any orphaned Chrome/Chromium processes from whatsapp-web.js
+    // These can remain after server crashes or restarts
+    try {
+      // Kill Chrome processes that contain our session path
+      await execAsync('pkill -f ".wwebjs_auth" 2>/dev/null || true');
+      console.log('Cleaned up orphaned WhatsApp browser processes');
+    } catch (killError) {
+      // Ignore errors - processes might not exist
+    }
+    
+    // Small delay to let processes fully terminate
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  } catch (err) {
+    console.error('Startup cleanup error:', err);
+  }
+};
+
+// Run cleanup on module load (server start/restart)
+startupCleanup();
+
+// Force kill any orphaned browser processes
+async function killOrphanedBrowsers() {
+  try {
+    const { exec } = require('child_process');
+    const { promisify } = require('util');
+    const execAsync = promisify(exec);
+    
+    await execAsync('pkill -9 -f ".wwebjs_auth" 2>/dev/null || true');
+    console.log('Killed orphaned browser processes');
+    
+    // Wait for processes to fully terminate
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  } catch (err) {
+    console.error('Error killing browsers:', err);
+  }
+}
+
+// Clean up any existing client before creating a new one
+async function cleanupExistingClient() {
+  if (whatsappClient) {
+    try {
+      console.log('Cleaning up existing WhatsApp client...');
+      await whatsappClient.destroy();
+    } catch (err) {
+      console.error('Error during cleanup:', err);
+    }
+    whatsappClient = null;
+  }
+  
+  // Also kill any browser processes
+  try {
+    const { exec } = require('child_process');
+    await new Promise((resolve) => {
+      exec('pkill -9 -f ".wwebjs_auth" 2>/dev/null', () => resolve());
+    });
+  } catch (err) {
+    console.error('Error killing browsers during cleanup:', err);
+  }
+  
+  isReady = false;
+  qrCodeData = null;
+  isInitializing = false;
+}
+
 // Initialize client if not already done
-function initializeClient() {
+async function initializeClient() {
+  // Always clean up first to prevent browser conflicts
+  await cleanupExistingClient();
+  
   if (!whatsappClient) {
     whatsappClient = new Client({
       authStrategy: new LocalAuth({
@@ -125,7 +200,10 @@ export async function POST() {
 
     // Initialize new client only if one doesn't exist
     if (!whatsappClient) {
-      initializeClient();
+      // Kill any orphaned browsers first to prevent conflicts
+      await killOrphanedBrowsers();
+      
+      await initializeClient();
       
       // Start initialization
       isInitializing = true;
@@ -134,8 +212,22 @@ export async function POST() {
       whatsappClient.initialize().catch(err => {
         console.error('Initialization error:', err);
         isInitializing = false;
-        // Reset client on error
-        whatsappClient = null;
+        
+        // If browser conflict, force cleanup and ask user to retry
+        if (err.message && err.message.includes('userDataDir')) {
+          console.log('Browser conflict detected, forcing cleanup...');
+          
+          // Force kill browser processes
+          const { exec } = require('child_process');
+          exec('pkill -f ".wwebjs_auth" 2>/dev/null', (killErr) => {
+            if (killErr) console.error('Error killing browser:', killErr);
+          });
+          
+          cleanupExistingClient();
+        } else {
+          // Reset client on other errors
+          whatsappClient = null;
+        }
       });
 
       // Wait for QR code or ready state
@@ -175,15 +267,27 @@ export async function POST() {
     console.error('WhatsApp connection error:', error);
     isInitializing = false;
     
-    // If error is about session already in use, reset the client
+    // If error is about session already in use, force cleanup and reset
     if (error.message && error.message.includes('userDataDir')) {
-      console.log('Browser session conflict detected, resetting client...');
-      whatsappClient = null;
-      isReady = false;
-      qrCodeData = null;
+      console.log('Browser session conflict detected, forcing cleanup...');
+      
+      // Force kill browser processes
+      const { exec } = require('child_process');
+      exec('pkill -f ".wwebjs_auth" 2>/dev/null', async (killErr) => {
+        if (killErr) console.error('Error killing browser:', killErr);
+        
+        // Wait a bit for processes to die
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      });
+      
+      // Force cleanup
+      await cleanupExistingClient();
       
       return NextResponse.json(
-        { error: 'Browser session conflict. Please try connecting again.' },
+        { 
+          error: 'Browser session conflict detected and cleaned up. The orphaned browser process has been killed. Please wait 3 seconds and try connecting again.',
+          canRetry: true
+        },
         { status: 500 }
       );
     }
@@ -207,17 +311,7 @@ export async function DELETE() {
   try {
     if (whatsappClient) {
       console.log('Disconnecting WhatsApp client...');
-      
-      try {
-        await whatsappClient.destroy();
-      } catch (destroyError) {
-        console.error('Error during destroy:', destroyError);
-      }
-      
-      whatsappClient = null;
-      isReady = false;
-      qrCodeData = null;
-      isInitializing = false;
+      await cleanupExistingClient();
       
       return NextResponse.json({
         message: 'WhatsApp client disconnected successfully'

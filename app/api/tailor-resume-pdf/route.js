@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, UnderlineType, convertInchesToTwip, ExternalHyperlink, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, UnderlineType, TabStopType, TabStopPosition } from 'docx';
 import fs from 'fs';
 import path from 'path';
 import mammoth from 'mammoth';
+import { generateLLM, getLLMConfig } from '@/lib/llmProvider.js';
 
 const TEMP_DIR = path.join(process.cwd(), 'temp');
 
@@ -19,17 +20,17 @@ export async function POST(req) {
     const resumeFile = formData.get('resumeFile');
     const resumeText = formData.get('resumeText');
     
-    // Extract user credentials (with defaults)
-    const userName = formData.get('userName') || 'Poojith Reddy A';
-    const userEmail = formData.get('userEmail') || 'poojithreddy.se@gmail.com';
-    const userPhone = formData.get('userPhone') || '312-536-9779';
-    const userLinkedIn = formData.get('userLinkedIn') || 'https://www.linkedin.com/in/poojith-reddy-com/';
+    // Extract user credentials
+    const userName = formData.get('userName') || 'John Doe';
+    const userEmail = formData.get('userEmail') || 'john.doe@email.com';
+    const userPhone = formData.get('userPhone') || '(000) 000-0000';
+    const userTitle = formData.get('userTitle') || 'Software Engineer';
     
     const userCredentials = {
       name: userName,
       email: userEmail,
       phone: userPhone,
-      linkedin: userLinkedIn
+      title: userTitle
     };
 
     if (!jobDescription) {
@@ -42,62 +43,58 @@ export async function POST(req) {
       const buffer = await resumeFile.arrayBuffer();
       const fileType = resumeFile.name.toLowerCase();
       
+      console.log(`📂 Processing file: ${resumeFile.name} (${(buffer.byteLength / 1024).toFixed(2)} KB)`);
+      
       if (fileType.endsWith('.pdf')) {
         resumeContent = await extractTextFromPDF(buffer);
+        console.log(`📄 Extracted ${resumeContent.length} characters from PDF`);
       } else if (fileType.endsWith('.docx') || fileType.endsWith('.doc')) {
         resumeContent = await extractTextFromDocx(buffer);
-      } else {
-        return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 });
+        console.log(`📄 Extracted ${resumeContent.length} characters from DOCX`);
       }
+      
+      // Debug output
+      console.log('\n📋 EXTRACTED CONTENT (first 500 chars):');
+      console.log('─'.repeat(80));
+      console.log(resumeContent.substring(0, 500));
+      console.log('─'.repeat(80));
     } else if (resumeText) {
       resumeContent = resumeText;
     } else {
-      // Load default resume if none provided
-      console.log('📄 No resume provided, loading default resume...');
+      // Fallback to default resume
       const defaultResumePath = path.join(process.cwd(), 'defaultpoojithresume.txt');
       resumeContent = fs.readFileSync(defaultResumePath, 'utf-8');
     }
 
-    console.log('📝 Starting JD-based resume tailoring (MULTI-PASS APPROACH)...');
+    console.log('📝 Starting LLM-based resume tailoring...');
+    console.log('   Using AI to parse resume structure and tailor to JD...');
 
-    // Generate tailored content with multiple API calls
-    const tailoredContent = await generateTailoredContent(jobDescription, resumeContent, userCredentials);
+    // Use LLM to parse resume and generate tailored content in one comprehensive call
+    const tailoredContent = await parseAndTailorWithLLM(resumeContent, jobDescription, userCredentials);
     
-    // Create DOCX with formatting
+    // Create DOCX
     console.log('\n📄 Generating DOCX...');
     const docxPath = await generateResumeDOCX(tailoredContent);
     
     const endTime = Date.now();
     const totalSeconds = ((endTime - startTime) / 1000).toFixed(0);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    const generationTime = minutes > 0 ? `${minutes} min ${seconds} sec` : `${seconds} sec`;
-    console.log(`✅ Resume generated successfully in ${generationTime}`);
+    console.log(`✅ Resume generated successfully in ${totalSeconds} sec`);
     
     // Read the final DOCX
     const docxBuffer = fs.readFileSync(docxPath);
+    const docxBase64 = docxBuffer.toString('base64');
     
     // Generate HTML preview
     const htmlPreview = generateHTMLPreview(tailoredContent);
     
-    // Convert DOCX to base64 for frontend
-    const docxBase64 = docxBuffer.toString('base64');
+    // Clean up temp file
+    fs.unlinkSync(docxPath);
     
-    // Clean up temp files
-    setTimeout(() => {
-      try {
-        if (fs.existsSync(docxPath)) fs.unlinkSync(docxPath);
-      } catch (e) {
-        console.error('Cleanup error:', e);
-      }
-    }, 60000);
-    
-    // Return JSON with preview data
     return NextResponse.json({
       htmlPreview,
       docxBase64,
-      generationTime,
-      filename: 'PoojithResume_Tailored.docx'
+      generationTime: `${totalSeconds} sec`,
+      filename: `${userName.replace(/\s+/g, '')}_Resume_Tailored.docx`
     });
     
   } catch (error) {
@@ -109,670 +106,1180 @@ export async function POST(req) {
   }
 }
 
-// Helper: Extract bullets from a company section
-function extractCompanyBullets(resumeContent, companyName) {
-  const lines = resumeContent.split('\n');
-  const bullets = [];
-  let inCompanySection = false;
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    
-    if (line.toLowerCase().includes(companyName.toLowerCase())) {
-      inCompanySection = true;
-      continue;
-    }
-    
-    if (inCompanySection && (line.startsWith('Environment:') || 
-        (line.match(/^[A-Z][\w\s]+,\s+[\w\s]+,\s+[\w\s]+\s+\w{3}\s+\d{4}/)))) {
-      break;
-    }
-    
-    if (inCompanySection && line.startsWith('•')) {
-      bullets.push(line.substring(1).trim());
-    }
+// Get appropriate prompt based on LLM provider capabilities
+function getPromptForProvider(provider, jd, resumeText) {
+  // Sarvam AI has 7168 token limit - use condensed prompt with truncation
+  if (provider === 'sarvam') {
+    return getCondensedPromptWithTruncation(jd, resumeText);
   }
-  
-  console.log(`📌 Extracted ${bullets.length} original bullets for ${companyName}`);
-  return bullets;
+  // Ollama has no limit - use full detailed prompt
+  return getFullPrompt(jd, resumeText);
 }
 
-// Helper: Extract technical skills
-function extractTechnicalSkills(resumeContent) {
-  const lines = resumeContent.split('\n');
-  const skills = {};
-  let inSkillsSection = false;
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    
-    if (line.includes('Technical Skills:') || line.includes('TECHNICAL SKILLS')) {
-      inSkillsSection = true;
-      continue;
-    }
-    
-    if (inSkillsSection && (line.includes('Work Experience') || line.includes('WORK EXPERIENCE') || line.includes('Environment:'))) {
-      break;
-    }
-    
-    if (inSkillsSection && line.includes('\t')) {
-      const parts = line.split('\t');
-      if (parts.length >= 2) {
-        const category = parts[0].trim();
-        const items = parts.slice(1).join(' ').trim();
-        if (category && items) {
-          skills[category] = items;
-        }
-      }
-    }
-  }
-  
-  return skills;
+// Estimate token count (rough: 1 token ≈ 3.5 characters for English text)
+function estimateTokens(text) {
+  return Math.ceil(text.length / 3.5);
 }
 
-// RETRY HELPER FUNCTION
-async function generateWithRetry(sectionName, generatorFn, maxRetries, minAcceptable, bulletField) {
-  let retryCount = 0;
-  
-  while (retryCount < maxRetries) {
-    try {
-      const parsed = await generatorFn();
-      
-      const bullets = bulletField === 'summary' ? parsed.summary : parsed.bullets;
-      
-      if (bullets && bullets.length >= minAcceptable) {
-        console.log(`   ✅ ${sectionName}: ${bullets.length} bullets generated\n`);
-        return parsed;
-      } else {
-        retryCount++;
-        console.log(`   ⚠️ ${sectionName} attempt ${retryCount}: Got ${bullets?.length || 0} bullets (need ${minAcceptable}+), retrying...`);
-        if (retryCount >= maxRetries) {
-          console.log(`   ✅ ${sectionName}: ${bullets.length} bullets generated (after ${retryCount} attempts)\n`);
-          return parsed;
-        }
-      }
-    } catch (error) {
-      retryCount++;
-      console.error(`   ❌ ${sectionName} parse error (attempt ${retryCount}):`, error.message);
-      if (retryCount >= maxRetries) {
-        throw new Error(`${sectionName} JSON parsing failed after ${maxRetries} attempts: ${error.message}`);
-      }
-    }
-  }
-  
-  throw new Error(`${sectionName} generation failed after retries`);
+// Truncate text to fit within token limit
+function truncateToTokenLimit(text, maxTokens) {
+  const maxChars = Math.floor(maxTokens * 3.5);
+  if (text.length <= maxChars) return text;
+  return text.substring(0, maxChars) + '\n...[truncated for token limit]';
 }
 
-// MAIN GENERATION FUNCTION - MULTI-PASS APPROACH
-async function generateTailoredContent(jobDescription, resumeContent, userCredentials) {
-  console.log('\n🚀 Starting MULTI-PASS content generation...\n');
+// Condensed prompt with automatic truncation for Sarvam AI (7168 token limit)
+function getCondensedPromptWithTruncation(jd, resumeText) {
+  const MAX_TOKENS = 7168;
+  const PROMPT_OVERHEAD = 450; // Reduced overhead for ultra-minimal prompt
+  const AVAILABLE_TOKENS = MAX_TOKENS - PROMPT_OVERHEAD;
   
-  // STEP 1: Extract original bullets for companies that don't need AI tailoring
-  console.log('📌 STEP 1: Extracting original bullets from resume...');
-  const stateOfTexasBullets = extractCompanyBullets(resumeContent, 'State of Texas');
-  const costcoBullets = extractCompanyBullets(resumeContent, 'Costco');
-  const wiproBullets = extractCompanyBullets(resumeContent, 'Wipro');
-  const technicalSkills = extractTechnicalSkills(resumeContent);
+  // Allocate tokens: 30% for JD, 70% for resume (resume has more company details)
+  const jdTokens = Math.floor(AVAILABLE_TOKENS * 0.30);
+  const resumeTokens = Math.floor(AVAILABLE_TOKENS * 0.70);
   
-  console.log(`   - State of Texas: ${stateOfTexasBullets.length} bullets`);
-  console.log(`   - Costco: ${costcoBullets.length} bullets`);
-  console.log(`   - Wipro: ${wiproBullets.length} bullets`);
-  console.log(`   - Technical Skills: ${Object.keys(technicalSkills).length} categories\n`);
+  const truncatedJD = truncateToTokenLimit(jd, jdTokens);
+  const truncatedResume = truncateToTokenLimit(resumeText, resumeTokens);
   
-  // STEP 2, 3, 4: Run all three AI generations in PARALLEL for speed  
-  console.log('🚀 STEPS 2-4: Generating Summary, Bank of America, and UnitedHealth Group IN PARALLEL...\\n');
+  const finalPrompt = getCondensedPrompt(truncatedJD, truncatedResume);
+  const estimatedTotal = estimateTokens(finalPrompt);
   
-  const maxRetries = 2;  // Reduced from 3 to 2 for speed
-  const minAcceptable = 25; // Accept 25+ bullets
+  console.log(`📊 Token estimation: JD=${estimateTokens(truncatedJD)}, Resume=${estimateTokens(truncatedResume)}, Total=${estimatedTotal}/${MAX_TOKENS}`);
+  console.log(`🎯 Output capacity: ~${16000} tokens available for complete resume generation`);
   
-  // Run all three generations in parallel
-  const [summaryParsed, boaParsed, uhgParsed] = await Promise.all([
-    // Summary generation
-    generateWithRetry('Summary', async () => {
-      const summaryPrompt = `You are an expert resume writer. Generate a comprehensive professional summary tailored to this job.
+  if (estimatedTotal > MAX_TOKENS) {
+    console.warn(`⚠️ Estimated tokens (${estimatedTotal}) exceeds limit (${MAX_TOKENS}). May still fail.`);
+  }
+  
+  return finalPrompt;
+}
+
+// Condensed prompt for token-limited providers (Sarvam AI: 7168 tokens)
+function getCondensedPrompt(jd, resumeText) {
+  return `Parse and tailor resume to JD. Return complete JSON structure.
+
+JD: ${jd}
+
+RESUME: ${resumeText}
+
+Output JSON with ALL companies (3-4 bullets each - will expand later), ALL skills. Use JD keywords.
+
+{
+"name":"Full Name",
+"title":"JD Title",
+"email":"email",
+"phone":"phone",
+"summary":["[Title] with X+ years in [domain], specializing in [JD tech]","5 more bullets"],
+"companies":[{"role":"Role","company":"Company","location":"Location","period":"Dates","bullets":["3-4 bullets with JD tech"],"technologies":"Tech1, Tech2"}],
+"skills":{"proven":{"Languages":"all from JD","Cloud":"all from JD","Databases":"all from JD","DevOps":"all from JD"}},
+"education":"Uni Degree Dates"
+}
+
+List EVERY company from resume. Close all braces. Output:`;
+}
+
+// Full detailed prompt for providers without token limits (Ollama)
+function getFullPrompt(jd, resumeText) {
+  return `You are an expert ATS resume writer creating a credible, interview-defensible resume tailored to a job description.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CORE PRINCIPLE: HONEST KEYWORD OPTIMIZATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+GOAL: Maximize ATS score + Interview defensibility
+- Include ALL JD keywords (Summary, Experience, Skills, Labs)
+- Transform entire resume to match JD stack where plausible
+- Use "safe placement" strategies for any remaining technologies
+- Maintain domain coherence and seniority-appropriate language
 
 JOB DESCRIPTION:
-${jobDescription}
+${jd}
 
 CANDIDATE'S RESUME:
-${resumeContent}
+${resumeText}
 
-TASK: Generate EXACTLY 30 bullet points for the PROFESSIONAL SUMMARY section.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RULE 1: TECHNOLOGY CLASSIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-REQUIREMENTS:
-1. Extract the candidate's real name, title, email, and phone from the resume
-2. Each bullet must be 150-200 characters minimum
-3. Tailor bullets to highlight skills matching the job description
-4. Focus on: years of experience, technical expertise, achievements with metrics
-5. Use action verbs: Architected, Engineered, Designed, Developed, Built, Implemented
+Before writing, classify each JD technology:
 
-OUTPUT FORMAT (JSON only, no extra text):
+PROVEN TECHNOLOGY (already in candidate's resume):
+  ✅ CAN claim: "Implemented", "Developed", "Built", "Designed"
+  ✅ CAN use in: Summary, Work Experience bullets, Skills (Proven section)
+  ✅ CAN include: Specific metrics, production claims, architecture decisions
+
+ADJACENT TECHNOLOGY (not in resume, but technically related):
+  ⚠️ CAN claim: "Integrated with", "Collaborated with teams using", "Supported services using"
+  ⚠️ CAN use in: Work Experience (1-2 bullets max per company)
+  ⚠️ EXAMPLES:
+    - "Integrated authentication service with OAuth2-based identity provider"
+    - "Collaborated with platform team deploying services to Kubernetes clusters"
+    - "Supported API gateway using gRPC for internal service communication"
+
+NEW/LEARNING TECHNOLOGY (not in resume, no proven experience):
+  ⚠️ CAN claim production work if technically plausible and domain-matched
+  ✅ Safe options:
+    (a) Direct implementation: "Implemented Kafka consumers for event streaming" (if role used messaging)
+    (b) Hands-on Labs section: "Built gRPC POC for microservices communication"
+    (c) Skills section: List under "Familiarity / Working Knowledge"
+    (d) Summary: "Working knowledge of Kubernetes, Helm, and container orchestration"
+    (e) Experience: "Created internal POC using Kafka for event streaming" (if not production-ready)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RULE 2: DOMAIN COHERENCE CHECK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BEFORE adding JD technology to a company, verify domain match:
+
+Healthcare/Medical company:
+  ✅ Plausible: Healthcare APIs, HIPAA, patient data, medical records, billing, HL7/FHIR
+  ⚠️ Adjacent: General backend tech (REST APIs, databases, microservices, Docker, Kubernetes)
+  ❌ Implausible: IoT gateways, smart home, industrial automation, trading systems
+
+Education/EdTech company:
+  ✅ Plausible: LMS, student data, course management, content delivery, grading systems
+  ⚠️ Adjacent: General backend tech (APIs, databases, cloud platforms)
+  ❌ Implausible: Healthcare billing, IoT devices, financial trading, home automation
+
+Finance/Fintech company:
+  ✅ Plausible: Payment APIs, fraud detection, trading systems, financial data, transactions
+  ⚠️ Adjacent: General backend tech (microservices, databases, messaging)
+  ❌ Implausible: Healthcare systems, education platforms, IoT devices
+
+IoT/Smart Home company:
+  ✅ Plausible: IoT gateways, device integration, MQTT, sensor data, home automation
+  ⚠️ Adjacent: General backend tech (APIs, cloud, databases)
+  ❌ Implausible: Healthcare billing, education platforms, financial trading
+
+General Tech/SaaS/Platform company:
+  ✅ Plausible: Most technologies (broad scope)
+
+⚠️ RULE: If technology doesn't match company domain → Use Adjacent/Learning placement only
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STRUCTURE REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. PROFESSIONAL SUMMARY (6-8 bullets, 150-250 chars each - 1.5 to 2.5 lines)
+   
+   FIRST BULLET (MANDATORY FORMAT):
+   "[Job Title from JD] with [X]+ years of experience in [primary domain], specializing in [key tech stack from JD] and [secondary skills]. Proven track record in [main achievement area] across [types of systems/domains]."
+   
+   Example first bullets:
+   ✅ "Software Engineer with 5+ years of experience in backend development, specializing in Go, Python, and distributed systems. Proven track record in building scalable microservices architectures across healthcare and fintech domains."
+   ✅ "Senior Backend Developer with 7+ years of experience in API development, specializing in RESTful services, GraphQL, and cloud-native architectures. Extensive expertise in designing high-performance systems handling millions of requests daily."
+   
+   REMAINING BULLETS (5-7 bullets):
+   Distribution:
+   - 50% (2-3 bullets): Proven skills and technical achievements
+   - 30% (2 bullets): JD keywords and domain expertise
+   - 20% (1-2 bullets): Additional technologies and methodologies
+   
+   Each bullet should:
+   - Be 150-250 characters (1.5-2.5 lines of readable content)
+   - Include specific technologies, metrics, or outcomes
+   - Flow naturally without sounding templated
+   - For unproven tech, use phrases:
+     * "Working knowledge of [tech]"
+     * "Hands-on experience with [tech] through prototyping"
+     * "Familiar with [tech] and [related tech]"
+   
+   Example bullets:
+   ✅ "Expert in designing and implementing microservices architectures using Docker and Kubernetes, with hands-on experience deploying containerized applications to AWS and GCP cloud platforms"
+   ✅ "Strong background in database optimization and data modeling with PostgreSQL, MongoDB, and Redis, consistently improving query performance by 40-60% through indexing strategies and caching mechanisms"
+   ✅ "Proficient in CI/CD automation using Jenkins, GitLab CI, and GitHub Actions, implementing comprehensive testing frameworks that reduced production bugs by 50%"
+   ❌ "Architected distributed Kubernetes platform" (too vague, no context)
+
+2. WORK EXPERIENCE (EACH COMPANY: 8-10 bullets, 150-200 chars each)
+   
+   Bullet Distribution per company:
+   - 40-50% (4-5 bullets): PROVEN - Authentic company domain work
+   - 30-40% (3-4 bullets): ADAPTED - Bridge to JD tech (plausible only)
+   - 10-20% (1-2 bullets): TRANSFERABLE - Universal skills (CI/CD, testing, collaboration)
+   
+   Proven Bullets (maintain company's actual domain):
+   - Can transform to use JD technologies if domain-appropriate
+   - Preserve company's industry context (healthcare → medical, education → learning)
+   - Show accomplishments with JD-aligned tech stack where plausible
+   - Example: "Developed HIPAA-compliant APIs for patient data management using Go and PostgreSQL"
+   
+   Adapted Bullets (bridge to JD tech where plausible):
+   - Transform technologies to match JD stack
+   - Use "adjacent" language for new tech: "integrated with", "supported", "collaborated"
+   - Keep or improve metrics
+   - Examples:
+     * If JD wants microservices → Can claim "Designed microservices architecture"
+     * If JD wants Kubernetes → Can claim "Deployed services to Kubernetes"
+     * ❌ If healthcare company → DON'T add "IoT gateway" unless technically adjacent
+   
+   Transferable Bullets (universal engineering skills):
+   - CI/CD pipelines, testing, code quality, team collaboration
+   - Performance optimization (database, queries, APIs)
+   - Can fully adapt to JD keywords
+   - Example: "Implemented CI/CD pipelines using Jenkins and GitLab CI, reducing deployment time by 40%"
+   
+   Safe placement for remaining JD tech:
+   - "Collaborated with platform team deploying services to Kubernetes"
+   - "Created internal POC using Kafka for event streaming evaluation"
+   - "Supported integration with gRPC-based internal services"
+   
+   ⚠️ AVOID:
+   - Cross-domain contamination (IoT keywords in healthcare, finance keywords in education)
+   - Scope inflation for seniority level
+
+3. TECHNICAL SKILLS (Organized in 2 sections)
+   
+   Section A: PROVEN SKILLS (6-8 categories)
+   - Include ALL JD technologies
+   - Transform candidate's tech stack to match JD where plausible
+   - Categories: Languages, Cloud, Databases, Frameworks, DevOps, Messaging, etc.
+   
+   Section B: FAMILIARITY / WORKING KNOWLEDGE (2-3 categories) - OPTIONAL
+   - List JD technologies NOT easily provable in work experience
+   - Group by category: "Container Orchestration (Learning): Kubernetes, Helm"
+   - Be honest: "Currently expanding knowledge through hands-on projects"
+   
+   Example:
+   PROVEN SKILLS:
+     - Languages: Go, Python, Java, JavaScript (from JD)
+     - Databases: PostgreSQL, MongoDB, Redis (from JD)
+     - DevOps: Jenkins, GitLab CI, Docker, Kubernetes (from JD)
+   
+   WORKING KNOWLEDGE (optional):
+     - Service Mesh & Networking: Istio, OpenVPN (hands-on labs)
+
+4. HANDS-ON LABS / PROJECTS (OPTIONAL - 4-6 bullets)
+   
+   Purpose: Capture remaining JD keywords ethically
+   
+   For each unproven JD technology not placed elsewhere:
+   - Be explicit: "Built POC", "Created lab environment", "Learned through"
+   - Include what you built and what you learned
+   - Use present tense for ongoing learning
+   
+   Examples:
+   ✅ "Built gRPC-based microservices POC in Go to evaluate performance vs REST APIs"
+   ✅ "Deployed sample containerized applications to local Kubernetes cluster using Helm charts"
+   ✅ "Created Kafka event streaming prototype for real-time data processing evaluation"
+   ✅ "Learning OpenVPN configuration and service mesh concepts through hands-on experimentation"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STYLE & WRITING RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. BULLET FORMAT:
+   Structure: [Action Verb] + [Technology/Method] + [Metric/Impact] + [Business Context]
+   Length: 150-200 characters
+   
+   Example:
+   ✅ "Optimized PostgreSQL query performance for high-traffic patient portal, reducing response time by 55% through indexing and query refactoring strategies"
+   ❌ "Worked on database optimization" (too vague)
+   ❌ "Single-handedly architected enterprise-scale distributed Kubernetes platform serving 10M users" (unrealistic for mid-level)
+
+2. VERB TIERS BY SENIORITY:
+   Junior (0-2 years): Implemented, Developed, Built, Contributed to, Assisted in
+   Mid (2-4 years): Developed, Built, Designed (components), Optimized, Implemented
+   Senior (4-6 years): Architected (systems), Led, Designed (platforms), Engineered
+   Staff+ (6+ years): Architected (platforms), Established, Led org initiatives
+   
+   ⚠️ Match verbs to candidate's actual experience level
+
+3. METRICS RULES:
+   - Use if provided in candidate's resume, or create believable ones
+   - Prefer relative impact: "improved", "reduced", "increased"
+   - Avoid unrealistic numbers: "10M requests/sec", "99.999% uptime"
+   - Prefer believable ranges: "50K+ requests/day", "reduced latency by 30-40%"
+
+4. AVOID:
+   ❌ Repetition between Summary and first job bullets
+   ❌ Meta-text: "Here are bullets", "Revised version", "New bullets"
+   ❌ Multiple bullets about the same accomplishment
+   ❌ Buzzword stacking without context: "cloud-native AI-driven blockchain microservices"
+   ❌ Technologies that contradict company domain
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VALIDATION CHECKLIST (Before returning resume)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Verify:
+1. ✅ ALL JD keywords appear at least once (Summary, Experience, Skills, or Labs)
+2. ✅ Production claims transformed to match JD stack where plausible
+3. ✅ Each company's bullets match their actual industry domain
+4. ✅ Remaining unproven JD tech in "Hands-on Labs" or "Working Knowledge" sections (if needed)
+5. ✅ Action verbs match candidate's seniority level
+6. ✅ No domain-contradicting claims (IoT at healthcare company unless adjacent)
+7. ✅ 8-10 bullets per company (proven + adapted + transferable)
+8. ✅ "Hands-on Labs" section present with 4-6 bullets (if needed for remaining keywords)
+9. ✅ Skills include ALL JD technologies
+10. ✅ All bullets are interview-defensible (candidate can explain)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT FORMAT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Return JSON:
 {
-  \"name\": \"Real Name From Resume\",
-  \"title\": \"Senior Java Full Stack Developer\",
-  \"email\": \"real@email.com\",
-  \"phone\": \"real-phone\",
-  \"summary\": [
-    \"First comprehensive bullet about experience and skills...\",
-    \"Second comprehensive bullet with metrics and achievements...\",
-    \"...continue until you have EXACTLY 30 bullets...\"
-  ]
-}
-
-🚨 CRITICAL RULES:
-1. Return ONLY the JSON object - no explanation, no commentary, no text before or after
-2. Generate ALL 30 bullets - Do NOT truncate or use \"...\" or \"continue...\"
-3. Write every single bullet in full detail
-4. Start your response with { and end with }`;
-      
-      const response = await callOllama(summaryPrompt);
-      return extractJSON(response);
-    }, maxRetries, minAcceptable, 'summary'),
-    
-    // Bank of America generation
-    generateWithRetry('Bank of America', async () => {
-      const boaPrompt = `You are an expert resume writer. Generate comprehensive work experience bullets for Bank of America role.
-
-JOB DESCRIPTION:
-${jobDescription}
-
-CANDIDATE'S ORIGINAL BANK OF AMERICA EXPERIENCE:
-${resumeContent.split('Bank of America')[1]?.split('UnitedHealth Group')[0] || 'Dec 2023 – Current, Senior Java Full Stack Developer'}
-
-TASK: Generate EXACTLY 30 bullet points for Bank of America work experience.
-
-REQUIREMENTS:
-1. Each bullet 150-200 characters minimum
-2. Tailor to job description requirements
-3. Include specific technologies, metrics, achievements
-4. Use action verbs: Architected, Engineered, Designed, Developed
-5. Make it comprehensive and detailed
-
-OUTPUT FORMAT (JSON only):
-{
-  \"company\": \"Bank of America\",
-  \"location\": \"Jersey City, NJ\",
-  \"period\": \"Dec 2023 – Current\",
-  \"role\": \"Senior Java Full Stack Developer\",
-  \"bullets\": [
-    \"First comprehensive bullet with technologies and metrics...\",
-    \"Second comprehensive bullet with achievements...\",
-    \"...continue until EXACTLY 30 bullets total...\"
-  ]
-}
-
-🚨 CRITICAL RULES:
-1. Return ONLY the JSON object - no explanation, no commentary, no text before or after
-2. Generate ALL 30 bullets - Do NOT truncate
-3. Write every single bullet in full detail
-4. Start your response with { and end with }`;
-      
-      const response = await callOllama(boaPrompt);
-      return extractJSON(response);
-    }, maxRetries, minAcceptable, 'bullets'),
-    
-    // UnitedHealth Group generation
-    generateWithRetry('UnitedHealth Group', async () => {
-      const uhgPrompt = `You are an expert resume writer. Generate comprehensive work experience bullets for UnitedHealth Group role.
-
-JOB DESCRIPTION:
-${jobDescription}
-
-CANDIDATE'S ORIGINAL UNITEDHEALTH GROUP EXPERIENCE:
-${resumeContent.split('UnitedHealth Group')[1]?.split('State of Texas')[0] || 'Aug 2020 – July 2023, Java Full Stack Developer II'}
-
-TASK: Generate EXACTLY 30 bullet points for UnitedHealth Group work experience.
-
-REQUIREMENTS:
-1. Each bullet 150-200 characters minimum
-2. Tailor to job description requirements
-3. Include specific technologies, metrics, achievements
-4. Use action verbs: Architected, Engineered, Designed, Developed
-5. Make it comprehensive and detailed
-
-OUTPUT FORMAT (JSON only):
-{
-  \"company\": \"United Health Group\",
-  \"location\": \"Chicago, IL\",
-  \"period\": \"Aug 2020 – July 2023\",
-  \"role\": \"Java Full Stack Developer II\",
-  \"bullets\": [
-    \"First comprehensive bullet with technologies and metrics...\",
-    \"Second comprehensive bullet with achievements...\",
-    \"...continue until EXACTLY 30 bullets total...\"
-  ]
-}
-
-🚨 CRITICAL RULES:
-1. Return ONLY the JSON object - no explanation, no commentary, no text before or after
-2. Generate ALL 30 bullets - Do NOT truncate
-3. Write every single bullet in full detail
-4. Start your response with { and end with }`;
-      
-      const response = await callOllama(uhgPrompt);
-      return extractJSON(response);
-    }, maxRetries, minAcceptable, 'bullets')
-  ]);
-  
-  console.log(`✅ All three sections generated in parallel!\n`);
-  
-  // STEP 5: Assemble final content with user credentials
-  console.log('📦 STEP 5: Assembling final resume structure...\n');
-  
-  const finalContent = {
-    name: userCredentials.name,
-    title: 'Senior Java Full Stack Developer',
-    email: userCredentials.email,
-    phone: userCredentials.phone,
-    linkedin: userCredentials.linkedin,
-    summary: summaryParsed.summary,
-    technicalSkills: technicalSkills,
-    experiences: [
-      {
-        company: 'Bank of America',
-        location: boaParsed.location || 'Jersey City, NJ',
-        period: boaParsed.period || 'Dec 2023 – Current',
-        role: boaParsed.role || 'Senior Java Full Stack Developer',
-        bullets: boaParsed.bullets
-      },
-      {
-        company: 'United Health Group',
-        location: uhgParsed.location || 'Chicago, IL',
-        period: uhgParsed.period || 'Aug 2020 – July 2023',
-        role: uhgParsed.role || 'Java Full Stack Developer II',
-        bullets: uhgParsed.bullets
-      },
-      {
-        company: 'State of Texas',
-        location: 'Austin, TX',
-        period: 'Aug 2018 – Nov 2020',
-        role: 'Java Full Stack Developer',
-        bullets: stateOfTexasBullets
-      },
-      {
-        company: 'Costco',
-        location: 'Seattle, WA',
-        period: 'Jan 2017 – July 2018',
-        role: 'Java/J2EE Developer',
-        bullets: costcoBullets
-      },
-      {
-        company: 'Wipro',
-        location: 'India',
-        period: 'Feb 2014 – Dec 2016',
-        role: 'Java Developer',
-        bullets: wiproBullets
-      }
-    ]
-  };
-  
-  // Log final summary
-  console.log('📊 FINAL CONTENT SUMMARY:');
-  console.log(`   Summary: ${finalContent.summary.length} bullets`);
-  console.log(`   Bank of America: ${finalContent.experiences[0].bullets.length} bullets`);
-  console.log(`   UnitedHealth Group: ${finalContent.experiences[1].bullets.length} bullets`);
-  console.log(`   State of Texas: ${finalContent.experiences[2].bullets.length} bullets`);
-  console.log(`   Costco: ${finalContent.experiences[3].bullets.length} bullets`);
-  console.log(`   Wipro: ${finalContent.experiences[4].bullets.length} bullets`);
-  console.log(`   Total bullets: ${finalContent.summary.length + finalContent.experiences.reduce((sum, exp) => sum + exp.bullets.length, 0)}\n`);
-  
-  return finalContent;
-}
-
-// Helper: Call Ollama API
-async function callOllama(prompt) {
-  const response = await fetch("http://localhost:11434/api/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "llama3:latest",
-      prompt: prompt,
-      stream: false,
-      format: "json",  // Request JSON output format
-      options: {
-        temperature: 0.3,
-        num_predict: -1,
-        num_ctx: 4096,  // Reduced from 8192 for faster generation
-        stop: []
-      }
-    })
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Ollama API error: ${response.status}`);
-  }
-  
-  const data = await response.json();
-  return data.response || '';
-}
-
-// Helper: Extract JSON from response
-function extractJSON(text) {
-  // Try to find JSON in the response
-  let start = text.indexOf('{');
-  
-  if (start === -1) {
-    console.error('❌ No JSON object found in response');
-    throw new Error('No valid JSON found in response');
-  }
-  
-  // Find the matching closing brace by counting braces
-  let braceCount = 0;
-  let end = -1;
-  
-  for (let i = start; i < text.length; i++) {
-    if (text[i] === '{') {
-      braceCount++;
-    } else if (text[i] === '}') {
-      braceCount--;
-      if (braceCount === 0) {
-        end = i;
-        break;
-      }
+  "name": "Candidate Name",
+  "title": "Job title from JD",
+  "email": "email@example.com",
+  "phone": "123-456-7890",
+  "summary": [
+    "FIRST: [Job Title] with [X]+ years of experience in [domain], specializing in [key tech stack]. Proven track record in [achievements] across [systems/domains]. (150-250 chars)",
+    "Bullet 2: Proven skill with specific technologies and outcomes (150-250 chars)",
+    "Bullet 3: Technical expertise with metrics or impact (150-250 chars)",
+    "Bullet 4: JD keyword - adapted with context (150-250 chars)",
+    "Bullet 5: Additional technologies and methodologies (150-250 chars)",
+    "Bullet 6: Working knowledge of remaining tech if needed (150-250 chars)"
+  ],
+  "companies": [
+    {
+      "role": "Role Title",
+      "company": "Company Name",
+      "location": "City, State",
+      "period": "Jan 2021 - Dec 2023",
+      "bullets": [
+        "Proven bullet 1 (company's domain + JD tech where plausible)",
+        "Proven bullet 2 (company's domain + JD tech where plausible)",
+        "Proven bullet 3 (company's domain + JD tech where plausible)",
+        "Adapted bullet 1 (transform to JD tech - plausible only)",
+        "Adapted bullet 2 (transform to JD tech - plausible only)",
+        "Adapted bullet 3 (adjacent tech: 'integrated with', 'supported')",
+        "Transferable bullet 1 (CI/CD, testing - use JD tech)",
+        "Transferable bullet 2 (optimization, collaboration)",
+        "POC/Lab bullet (if needed): 'Created POC using [remaining JD tech]'"
+      ],
+      "technologies": "PLAIN TEXT STRING: Tech1, Tech2, Tech3 (match bullets - prioritize JD tech)"
     }
-  }
+  ],
+  "skills": {
+    "proven": {
+      "Languages": "ALL from JD",
+      "Cloud": "ALL from JD",
+      "Databases": "ALL from JD",
+      "DevOps": "ALL from JD"
+    },
+    "workingKnowledge": {
+      "Category": "Remaining JD tech (if any)"
+    }
+  },
+  "handsOnLabs": [
+    "Built gRPC microservices POC (if needed for remaining JD tech)",
+    "Deployed to Kubernetes cluster (if needed for remaining JD tech)",
+    "Created Kafka prototype (if needed for remaining JD tech)"
+  ],
+  "education": "University    Degree    Dates (PLAIN TEXT STRING)"
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FINAL REMINDERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ GOAL: 100% JD keyword coverage + interview defensibility
+✅ STRATEGY: Transform entire resume to JD stack + safe placement for remaining tech
+✅ OUTCOME: Pass ATS + Pass recruiter + Pass hiring manager + Pass interview
+
+⚠️ MAINTAIN: Domain coherence, seniority-appropriate verbs
+⚠️ AVOID: Cross-domain claims that don't make sense
+
+Now generate the resume. Return ONLY valid JSON, no explanations:`;
+}
+
+// LLM-based parsing and tailoring (replaces manual regex parsing)
+async function parseAndTailorWithLLM(resumeText, jd, userCredentials) {
+  console.log('🤖 Using LLM to parse and tailor resume...');
   
-  if (end === -1 || end <= start) {
-    console.error('❌ Could not find matching closing brace');
-    throw new Error('No valid JSON found in response - unmatched braces');
-  }
-  
-  const jsonStr = text.slice(start, end + 1);
-  
+  // Get appropriate prompt based on provider capabilities
+  const provider = getLLMConfig().provider;
+  const prompt = getPromptForProvider(provider, jd, resumeText);
+
   try {
-    return JSON.parse(jsonStr);
-  } catch (parseError) {
-    console.error('❌ JSON Parse Error:', parseError.message);
-    console.error('📄 Attempted to parse:', jsonStr.substring(0, 500) + '...');
+    console.log(`🤖 LLM Provider: ${getLLMConfig().provider.toUpperCase()} (${getLLMConfig().model})`);
     
-    // Try to clean and parse again
-    const cleaned = jsonStr
-      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
-      .replace(/,(\s*[}\]])/g, '$1') // Remove trailing commas
-      .trim();
+    const data = await generateLLM({
+      prompt: prompt,
+      temperature: 0.8,  // Slightly higher for more detailed/creative bullets
+      num_predict: 20000,  // Increased for 8-10 detailed bullets per company (150-200 chars each)
+      num_ctx: 20480  // Larger context window for comprehensive output
+    });
+    let parsedData;
+    let cleanResponse = '';  // Declare outside try block for error logging
+    
+    console.log('📋 Full LLM Response:');
+    console.log('─'.repeat(80));
+    console.log(data.response);
+    console.log('─'.repeat(80));
     
     try {
-      return JSON.parse(cleaned);
-    } catch {
-      console.error('❌ Even cleaned JSON failed to parse');
-      throw new Error(`JSON parsing failed: ${parseError.message}`);
+      // Clean the response - extract JSON from mixed content
+      cleanResponse = data.response.trim();
+      
+      console.log(`📏 LLM response length: ${cleanResponse.length} characters`);
+      
+      // Remove common markdown code block patterns
+      cleanResponse = cleanResponse.replace(/^```json\s*/i, '').replace(/```\s*$/,'');
+      cleanResponse = cleanResponse.replace(/^```\s*/i, '').replace(/```\s*$/,'');
+      
+      // Find JSON object - look for opening { and closing }
+      const jsonStart = cleanResponse.indexOf('{');
+      let jsonEnd = cleanResponse.lastIndexOf('}');
+      
+      if (jsonStart === -1) {
+        throw new Error('No valid JSON object found in response');
+      }
+      
+      // Extract only the JSON portion
+      cleanResponse = cleanResponse.substring(jsonStart, jsonEnd + 1);
+      
+      // Check if JSON appears complete (basic validation)
+      const openBraces = (cleanResponse.match(/{/g) || []).length;
+      const closeBraces = (cleanResponse.match(/}/g) || []).length;
+      const openBrackets = (cleanResponse.match(/\[/g) || []).length;
+      const closeBrackets = (cleanResponse.match(/\]/g) || []).length;
+      
+      console.log(`🔧 JSON Structure: {${openBraces}/${closeBraces} [${openBrackets}/${closeBrackets}]`);
+      
+      // Attempt to repair JSON if brackets/braces are mismatched
+      if (openBraces !== closeBraces || openBrackets !== closeBrackets) {
+        console.warn(`⚠️  JSON incomplete - attempting repair...`);
+        
+        // Add missing closing brackets
+        const missingBrackets = openBrackets - closeBrackets;
+        if (missingBrackets > 0) {
+          cleanResponse += ']'.repeat(missingBrackets);
+          console.log(`   Added ${missingBrackets} closing bracket(s)`);
+        }
+        
+        // Add missing closing braces
+        const missingBraces = openBraces - closeBraces;
+        if (missingBraces > 0) {
+          cleanResponse += '}'.repeat(missingBraces);
+          console.log(`   Added ${missingBraces} closing brace(s)`);
+        }
+      }
+      
+      parsedData = JSON.parse(cleanResponse);
+      console.log('✅ LLM successfully parsed and tailored resume');
+      console.log(`   - Companies extracted: ${parsedData.companies?.length || 0}`);
+      console.log(`   - Summary points: ${parsedData.summary?.length || 0}`);
+      console.log(`   - Skill categories: ${Object.keys(parsedData.skills || {}).length}`);
+      
+      // Validate we have critical data
+      if (!parsedData.companies || parsedData.companies.length === 0) {
+        throw new Error('No work experience extracted. LLM failed to parse companies from resume.');
+      }
+      
+      if (!parsedData.summary || parsedData.summary.length === 0) {
+        throw new Error('No summary generated. LLM output incomplete.');
+      }
+      
+      // Check if skills extraction is too minimal
+      const skillCategories = Object.keys(parsedData.skills || {});
+      if (skillCategories.length < 3) {
+        console.warn(`⚠️  Only ${skillCategories.length} skill categories - JD may have more technologies to extract`);
+      }
+      
+      if (parsedData.companies) {
+        parsedData.companies.forEach((c, idx) => {
+          console.log(`     ${idx + 1}. ${c.role} @ ${c.company} (${c.bullets?.length || 0} bullets)`);
+          if (!c.bullets || c.bullets.length === 0) {
+            console.warn(`       ⚠️  Company ${idx + 1} has no bullets!`);
+          } else if (c.bullets.length < 8) {
+            console.warn(`       ⚠️  Company ${idx + 1} has only ${c.bullets.length} bullets - should have 8-10 for rich content`);
+          }
+        });
+      }
+      
+      // Post-process: Expand companies with < 8 bullets
+      console.log('\n🔍 Checking bullet count for each company...');
+      for (let idx = 0; idx < parsedData.companies.length; idx++) {
+        const company = parsedData.companies[idx];
+        if (!company.bullets || company.bullets.length < 8) {
+          const currentCount = company.bullets?.length || 0;
+          const needed = 8 - currentCount;
+          console.log(`\n📝 Company "${company.company}" has only ${currentCount} bullets. Expanding to 8 bullets...`);
+          
+          // Use LLM to generate additional bullets
+          const expansionPrompt = `You are expanding work experience bullets for a resume. CRITICAL: Maintain credibility and domain alignment.
+
+JOB DESCRIPTION TARGET:
+${jd}
+
+COMPANY: ${company.company}
+ROLE: ${company.role}
+PERIOD: ${company.period}
+
+EXISTING BULLETS (${currentCount}):
+${company.bullets?.join('\n') || 'None'}
+
+⚠️ CREDIBILITY RULES:
+1. **RESPECT COMPANY DOMAIN**: If company is healthcare, don't add IoT. If education, don't add finance.
+2. **PLAUSIBLE TECHNOLOGIES**: Only add JD tech that makes sense for this company's industry
+3. **SENIORITY-APPROPRIATE**: Use verbs matching the role level (avoid "Architected platform" for junior roles)
+4. **FOLLOW EXISTING STYLE**: Match the tone and technical level of existing bullets
+
+TASK: Generate ${needed} MORE bullets (150-200 chars each) that:
+- Maintain consistency with company's actual domain
+- Bridge to JD requirements where TECHNICALLY PLAUSIBLE
+- Use different action verbs than existing bullets
+- Include specific metrics, technologies, and business impact
+- Focus on: testing, CI/CD, performance optimization, collaboration, monitoring (universal skills)
+- DO NOT fabricate experience in domains company doesn't operate in
+
+Return ONLY the new bullet points, one per line, without numbers or bullet symbols.`;
+
+          try {
+            const expansionData = await generateLLM({
+              prompt: expansionPrompt,
+              temperature: 0.8,  // Slightly higher for creativity
+              num_predict: 2000,
+              num_ctx: 8192
+            });
+            const newBullets = expansionData.response.trim().split('\n')
+              .filter(line => line.trim().length > 50)  // Filter out short/empty lines
+              .map(line => line.trim().replace(/^[-•*]\s*/, ''))  // Remove bullet symbols
+              .slice(0, needed);  // Take only what we need
+            
+            if (newBullets.length > 0) {
+              company.bullets = [...(company.bullets || []), ...newBullets];
+              console.log(`   ✅ Added ${newBullets.length} bullets. Total now: ${company.bullets.length}`);
+            } else {
+              console.warn(`   ⚠️  Failed to generate additional bullets for ${company.company}`);
+            }
+          } catch (error) {
+            console.error(`   ❌ Error expanding bullets for ${company.company}:`, error.message);
+          }
+        } else {
+          console.log(`   ✅ ${company.company}: ${company.bullets.length} bullets (sufficient)`);
+        }
+      }
+      console.log('');
+      
+    } catch (parseError) {
+      console.error('❌ Failed to parse LLM JSON response:', parseError.message);
+      console.error('Full response length:', data.response.length);
+      console.error('Attempted to parse (first 1000 chars):');
+      console.error(cleanResponse?.substring(0, 1000));
+      console.error('Attempted to parse (last 500 chars):');
+      console.error(cleanResponse?.substring(cleanResponse.length - 500));
+      
+      throw new Error(`LLM returned invalid JSON: ${parseError.message}. The model may be truncating output. Try with a shorter JD or resume.`);
     }
+
+    // Merge with user credentials (use LLM data as base, override with user input if provided)
+    return {
+      name: userCredentials.name || parsedData.name,
+      title: userCredentials.title || parsedData.title,
+      email: userCredentials.email || parsedData.email,
+      phone: userCredentials.phone || parsedData.phone,
+      summary: parsedData.summary || [],
+      companies: parsedData.companies || [],
+      skills: parsedData.skills || {},
+      education: parsedData.education || ''
+    };
+    
+  } catch (error) {
+    console.error('❌ LLM parsing error:', error);
+    throw new Error('Failed to parse resume with LLM: ' + error.message);
   }
 }
 
-// Helper: Make technical terms bold in text
-function makeTechnicalTermsBold(text) {
-  // Common technical terms to make bold
-  const techTerms = [
-    'Java', 'J2EE', 'Spring', 'Spring Boot', 'Spring MVC', 'Spring Cloud', 'Spring Security',
-    'Hibernate', 'MyBatis', 'JPA', 'JDBC', 'REST', 'RESTful', 'SOAP', 'GraphQL',
-    'Angular', 'React', 'Node.js', 'Express.js', 'Vue.js', 'TypeScript', 'JavaScript',
-    'HTML5', 'CSS3', 'AJAX', 'jQuery', 'Bootstrap', 'Tailwind',
-    'Docker', 'Kubernetes', 'EKS', 'AWS', 'Azure', 'EC2', 'S3', 'Lambda', 'RDS',
-    'Microservices', 'Kafka', 'RabbitMQ', 'Redis', 'MongoDB', 'PostgreSQL', 'MySQL', 'Oracle',
-    'Jenkins', 'GitLab', 'GitHub', 'CI/CD', 'Terraform', 'Ansible',
-    'JUnit', 'Mockito', 'Selenium', 'Git', 'Maven', 'Gradle',
-    'Tomcat', 'JBoss', 'WebSphere', 'JSON', 'XML', 'OAuth', 'JWT',
-    'Python', 'SQL', 'NoSQL', 'Elasticsearch', 'Kibana', 'Logstash', 'ELK',
-    'Prometheus', 'Grafana', 'CloudWatch', 'Snowflake', 'Spark', 'Flink'
-  ];
+// OLD MANUAL PARSING FUNCTIONS - DEPRECATED
+// These are kept as backup but no longer used
+/*
+function parseResume(resumeContent) {
+  const lines = resumeContent.split('\n');
+  const data = {
+    summary: [],
+    education: '',
+    companies: [],
+    skills: {}
+  };
   
-  // Create regex pattern
-  const pattern = new RegExp(`\\b(${techTerms.join('|')})\\b`, 'gi');
+  let currentSection = null;
+  let currentCompany = null;
+  let inTechnologiesUsed = false;
   
-  // Split text by technical terms
-  const parts = [];
-  let lastIndex = 0;
-  let match;
-  const regex = new RegExp(pattern);
-  
-  while ((match = regex.exec(text)) !== null) {
-    // Add text before match
-    if (match.index > lastIndex) {
-      parts.push({ text: text.slice(lastIndex, match.index), bold: false });
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    
+    // Detect sections
+    if (line.match(/^PROFESSIONAL\s+SUMMARY:?$/i) || line.match(/^SUMMARY:?$/i)) {
+      currentSection = 'summary';
+      console.log(`📍 Found SUMMARY section at line ${i}`);
+      continue;
     }
-    // Add matched term (bold)
-    parts.push({ text: match[0], bold: true });
-    lastIndex = regex.lastIndex;
+    
+    if (line.match(/^(WORK\s+)?EXPERIENCE:?$/i) || line.match(/^PROFESSIONAL\s+EXPERIENCE:?$/i)) {
+      currentSection = 'experience';
+      console.log(`📍 Found EXPERIENCE section at line ${i}`);
+      continue;
+    }
+    
+    if (line.match(/^EDUCATION:?$/i)) {
+      currentSection = 'education';
+      console.log(`📍 Found EDUCATION section at line ${i}`);
+      continue;
+    }
+    
+    if (line.match(/^TECHNICAL\s+SKILLS:?$/i) || line.match(/^SKILLS:?$/i)) {
+      currentSection = 'skills';
+      console.log(`📍 Found SKILLS section at line ${i}`);
+      continue;
+    }
+    
+    // Parse summary bullets
+    if (currentSection === 'summary' && line.startsWith('•')) {
+      data.summary.push(line.substring(1).trim());
+      continue;
+    }
+    
+    // Parse work experience
+    if (currentSection === 'experience') {
+      // Check for "Technologies Used:" line
+      if (line.match(/^Technologies\s+Used:/i)) {
+        inTechnologiesUsed = true;
+        const techText = line.substring(line.indexOf(':') + 1).trim();
+        if (currentCompany && techText) {
+          currentCompany.technologies = techText;
+        }
+        continue;
+      }
+      
+      // If we're in technologies section, continue adding to it
+      if (inTechnologiesUsed && currentCompany && !line.match(/^(Senior|Software|Junior|Staff|Lead|Principal|Data|Associate)/i)) {
+        if (line.length > 0 && !line.startsWith('•')) {
+          currentCompany.technologies += ' ' + line;
+        }
+        if (line.length === 0) {
+          inTechnologiesUsed = false;
+        }
+        continue;
+      }
+      
+      // Try multiple company/role formats:
+      let jobMatch = null;
+      let role = null, company = null, location = null, period = null;
+      
+      // Format 1: "Role @ Company | Location     Date" (e.g., Software Engineer @ Google | NYC    Jan 2020 - Present)
+      jobMatch = line.match(/^(.+?)\s+@\s+(.+?)\s+\|\s+(.+?)(\s{2,})(.+)$/);
+      if (jobMatch) {
+        role = jobMatch[1].trim();
+        company = jobMatch[2].trim();
+        location = jobMatch[3].trim();
+        period = jobMatch[5].trim();
+      }
+      
+      // Format 2: "Company Name | Location     Date" (company line, role on next line)
+      if (!jobMatch) {
+        jobMatch = line.match(/^(.+?)\s+\|\s+(.+?)(\s{2,})(.+)$/);
+        if (jobMatch && !line.match(/^(Senior|Software|Junior|Staff|Lead|Principal|Data|Associate|Engineer)/i)) {
+          company = jobMatch[1].trim();
+          location = jobMatch[2].trim();
+          period = jobMatch[4].trim();
+          // Role will be on next line - store partial company
+          currentCompany = {
+            role: '',
+            company,
+            location,
+            period,
+            bullets: [],
+            technologies: ''
+          };
+          data.companies.push(currentCompany);
+          console.log(`   ✅ Found company (awaiting role): ${company} (${period})`);
+          continue;
+        }
+      }
+      
+      // Format 3: "Role | Company Name | Location | Date" (all delimited by |)
+      if (!jobMatch) {
+        jobMatch = line.match(/^(.+?)\s+\|\s+(.+?)\s+\|\s+(.+?)\s+\|\s+(.+)$/);
+        if (jobMatch) {
+          role = jobMatch[1].trim();
+          company = jobMatch[2].trim();
+          location = jobMatch[3].trim();
+          period = jobMatch[4].trim();
+        }
+      }
+      
+      // If we found role and company through any format, create/update company entry
+      if (role && company) {
+        inTechnologiesUsed = false;
+        currentCompany = {
+          role,
+          company,
+          location,
+          period,
+          bullets: [],
+          technologies: ''
+        };
+        data.companies.push(currentCompany);
+        console.log(`   ✅ Found company: ${role} @ ${company} (${period})`);
+        continue;
+      }
+      
+      // If previous line was company without role, this might be the role line
+      if (currentCompany && !currentCompany.role && line.match(/^(Senior|Software|Junior|Staff|Lead|Principal|Data|Associate|Engineer)/i)) {
+        currentCompany.role = line.trim();
+        console.log(`   ✅ Added role: ${currentCompany.role}`);
+        continue;
+      }
+      
+      // Parse bullet points
+      if (currentCompany && line.startsWith('•')) {
+        currentCompany.bullets.push(line.substring(1).trim());
+        continue;
+      }
+    }
+    
+    // Parse education
+    if (currentSection === 'education' && line.length > 0) {
+      if (!data.education) {
+        data.education = line;
+      }
+      continue;
+    }
+    
+    // Parse skills
+    if (currentSection === 'skills') {
+      // Format: "Category: skills, skills, skills"
+      const skillMatch = line.match(/^(.+?):\s*(.+)$/);
+      if (skillMatch) {
+        const category = skillMatch[1].trim();
+        const skills = skillMatch[2].trim();
+        data.skills[category] = skills;
+        console.log(`   📝 Skill category: ${category}`);
+        continue;
+      }
+    }
   }
   
-  // Add remaining text
-  if (lastIndex < text.length) {
-    parts.push({ text: text.slice(lastIndex), bold: false });
-  }
-  
-  return parts.length > 0 ? parts : [{ text, bold: false }];
+  return data;
 }
 
-// Generate DOCX from tailored content
+// Generate tailored content using AI
+async function generateTailoredContent(jd, resumeData, userCredentials) {
+  console.log('\n🚀 Generating tailored content with AI...');
+  
+  // Generate summary
+  console.log('📝 Generating summary...');
+  const summaryPrompt = `Job Description:
+${jd}
+
+Original Resume Summary Points:
+${resumeData.summary.join('\n')}
+
+Generate a PROFESSIONAL SUMMARY with 6-8 bullet points that:
+- Highlight relevant skills and experience for this specific job
+- Use powerful action verbs and quantifiable achievements
+- Emphasize technologies and methodologies mentioned in the JD
+- Keep each bullet concise (100-150 characters)
+- Start with strong technical competencies
+
+Return ONLY the bullet points, one per line, without bullet symbols.`;
+
+  const summaryData = await generateLLM({
+    prompt: summaryPrompt,
+    temperature: 0.8
+  });
+  const summaryPoints = summaryData.response.trim().split('\n').filter(l => l.trim().length > 0);
+  console.log(`   ✅ Generated ${summaryPoints.length} summary points`);
+  
+  // Generate tailored bullets for each company
+  const tailoredCompanies = [];
+  for (const company of resumeData.companies) {
+    console.log(`📝 Tailoring bullets for ${company.company}...`);
+    
+    const bulletPrompt = `Job Description:
+${jd}
+
+Company: ${company.company}
+Role: ${company.role}
+Original Accomplishments:
+${company.bullets.join('\n')}
+
+Generate 5-6 achievement bullet points that:
+- Align with the job description requirements
+- Emphasize relevant technologies, methodologies, and skills
+- Include quantifiable metrics and impact
+- Use strong action verbs (Developed, Architected, Implemented, Optimized, etc.)
+- Keep each bullet concise (120-180 characters)
+- Focus on technical depth and business impact
+
+Return ONLY the bullet points, one per line, without bullet symbols.`;
+
+    const bulletData = await generateLLM({
+      prompt: bulletPrompt,
+      temperature: 0.8
+    });
+    const bulletPoints = bulletData.response.trim().split('\n').filter(l => l.trim().length > 0);
+    
+    tailoredCompanies.push({
+      ...company,
+      bullets: bulletPoints
+    });
+    
+    console.log(`   ✅ Generated ${bulletPoints.length} bullets`);
+  }
+  
+  // Generate JD-tailored skills
+  console.log('📝 Generating JD-tailored skills...');
+  const skillsPrompt = `Job Description:
+${jd}
+
+Original Skills from Resume:
+${Object.entries(resumeData.skills).map(([cat, skills]) => `${cat}: ${skills}`).join('\n')}
+
+Analyze the job description and generate a TECHNICAL SKILLS section with 6-8 categories that:
+- Prioritize skills EXPLICITLY mentioned in the JD
+- Include relevant technologies, frameworks, and tools from the JD
+- Organize into logical categories (e.g., Programming Languages, Cloud Platforms, Databases, etc.)
+- Use the candidate's existing skills as a foundation but emphasize JD-relevant ones
+- Keep each category concise with 4-8 items
+
+Format: Return ONLY in this exact format:
+Category Name: skill1, skill2, skill3, skill4
+Category Name: skill1, skill2, skill3
+
+Do NOT include explanations, just the category:skills format.`;
+
+  const skillsData = await generateLLM({
+    prompt: skillsPrompt,
+    temperature: 0.8
+  });
+  const skillsText = skillsData.response.trim();
+  
+  // Parse AI-generated skills into object
+  const generatedSkills = {};
+  const skillLines = skillsText.split('\n').filter(l => l.trim().length > 0);
+  for (const line of skillLines) {
+    const match = line.match(/^(.+?):\s*(.+)$/);
+    if (match) {
+      const category = match[1].trim();
+      const skills = match[2].trim();
+      generatedSkills[category] = skills;
+    }
+  }
+  
+  console.log(`   ✅ Generated ${Object.keys(generatedSkills).length} skill categories tailored to JD`);
+
+  return {
+    name: userCredentials.name,
+    title: userCredentials.title,
+    email: userCredentials.email,
+    phone: userCredentials.phone,
+    summary: summaryPoints,
+    companies: tailoredCompanies,
+    skills: Object.keys(generatedSkills).length > 0 ? generatedSkills : resumeData.skills,
+    education: resumeData.education
+  };
+}
+*/
+// END OF DEPRECATED MANUAL PARSING FUNCTIONS
+
+// Generate DOCX matching the screenshot format
 async function generateResumeDOCX(content) {
+  console.log('📋 Creating DOCX with exact format match...');
+  
   const sections = [];
   
-  // Header - Name (large, bold, centered)
-  sections.push(
-    new Paragraph({
-      text: content.name,
-      heading: HeadingLevel.TITLE,
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 100 }
-    })
-  );
-  
-  // Title (centered)
-  sections.push(
-    new Paragraph({
-      text: content.title,
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 100 }
-    })
-  );
-  
-  // Contact Info - Blue shaded box (like in image)
+  // Header: Name Title (no dash)
   sections.push(
     new Paragraph({
       children: [
         new TextRun({
-          text: `Phone: ${content.phone} | Email: ${content.email}`,
-          size: 20
+          text: content.name,
+          bold: true,
+          size: 28
+        }),
+        new TextRun({
+          text: ' ',
+          size: 28
+        }),
+        new TextRun({
+          text: content.title,
+          size: 28
         })
       ],
-      alignment: AlignmentType.CENTER,
-      shading: {
-        fill: 'D6EAF8',  // Light blue background
-        val: 'clear'
-      },
-      spacing: { before: 100, after: 200 },
-      border: {
-        top: { color: '5DADE2', space: 1, style: 'single', size: 6 },
-        bottom: { color: '5DADE2', space: 1, style: 'single', size: 6 },
-        left: { color: '5DADE2', space: 1, style: 'single', size: 6 },
-        right: { color: '5DADE2', space: 1, style: 'single', size: 6 }
-      }
+      spacing: { after: 100 }
     })
   );
   
-  // LinkedIn
-  const linkedinUrl = content.linkedin;
+  // Contact info
   sections.push(
     new Paragraph({
       children: [
-        new TextRun({ text: 'LinkedIn : ', size: 20 }),
-        new ExternalHyperlink({
-          children: [
-            new TextRun({
-              text: linkedinUrl,
-              color: '0563C1',
-              underline: { type: UnderlineType.SINGLE },
-              size: 20
-            })
-          ],
-          link: linkedinUrl
+        new TextRun({
+          text: `${content.phone} | ${content.email}`,
+          size: 20
         })
       ],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 300 }
+      spacing: { after: 200 }
     })
   );
   
-  // Professional Summary Section
+  // PROFESSIONAL SUMMARY header
   sections.push(
     new Paragraph({
-      text: 'PROFESSIONAL SUMMARY',
-      heading: HeadingLevel.HEADING_1,
-      spacing: { before: 200, after: 150 },
-      border: {
-        bottom: { color: '000000', space: 1, style: 'single', size: 6 }
-      }
+      children: [
+        new TextRun({
+          text: 'PROFESSIONAL SUMMARY:',
+          bold: true,
+          size: 22
+        })
+      ],
+      spacing: { before: 200, after: 150 }
     })
   );
   
-  // Summary bullets with bold technical terms
-  for (const bullet of content.summary) {
-    const parts = makeTechnicalTermsBold(bullet);
+  // Summary bullets
+  for (const point of content.summary) {
     sections.push(
       new Paragraph({
-        children: [
-          new TextRun({ text: '• ', size: 20 }),
-          ...parts.map(part => new TextRun({
-            text: part.text,
-            size: 20,
-            bold: part.bold
-          }))
-        ],
-        spacing: { after: 120 }
+        text: point,
+        bullet: { level: 0 },
+        size: 20,
+        spacing: { before: 60, after: 60 }  // Slightly tighter for 2-page layout
       })
     );
   }
   
-  // Technical Skills Section
+  // EDUCATION header
   sections.push(
     new Paragraph({
-      text: 'TECHNICAL SKILLS',
-      heading: HeadingLevel.HEADING_1,
-      spacing: { before: 300, after: 150 },
-      border: {
-        bottom: { color: '000000', space: 1, style: 'single', size: 6 }
-      }
+      children: [
+        new TextRun({
+          text: 'EDUCATION:',
+          bold: true,
+          size: 22
+        })
+      ],
+      spacing: { before: 200, after: 120 }  // Tighter spacing
     })
   );
   
-  // Skills in table format
-  const skillRows = [];
-  for (const [category, skills] of Object.entries(content.technicalSkills)) {
-    skillRows.push(
-      new TableRow({
+  // Education content - handle both string and object formats
+  let educationText = content.education;
+  if (typeof content.education === 'object' && content.education !== null) {
+    // If it's an object, convert to string
+    if (content.education.university && content.education.degree) {
+      educationText = `${content.education.university}    ${content.education.degree}    ${content.education.dates || ''}`;
+    } else {
+      educationText = JSON.stringify(content.education);
+    }
+  }
+  sections.push(
+    new Paragraph({
+      text: educationText,
+      size: 20,
+      spacing: { after: 200 }
+    })
+  );
+  
+  // WORK EXPERIENCE header
+  sections.push(
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: 'WORK EXPERIENCE:',
+          bold: true,
+          size: 22
+        })
+      ],
+      spacing: { before: 200, after: 120 }  // Tighter spacing
+    })
+  );
+  
+  // Work experience entries
+  for (const company of content.companies) {
+    // Company header: Role @ Company | Location with date right-aligned
+    sections.push(
+      new Paragraph({
         children: [
-          new TableCell({
-            children: [new Paragraph({
-              children: [new TextRun({ text: category, bold: true, size: 20 })],
-              spacing: { before: 60, after: 60 }
-            })],
-            width: { size: 22, type: WidthType.PERCENTAGE },
-            verticalAlign: 'center',
-            shading: { fill: 'FFFFFF' },
-            margins: {
-              top: 100,
-              bottom: 100,
-              left: 100,
-              right: 100
-            }
+          new TextRun({
+            text: `${company.role} @ ${company.company} | ${company.location}`,
+            bold: true,
+            size: 20
           }),
-          new TableCell({
-            children: [new Paragraph({
-              children: [new TextRun({ text: skills, size: 20 })],
-              spacing: { before: 60, after: 60 }
-            })],
-            width: { size: 78, type: WidthType.PERCENTAGE },
-            verticalAlign: 'center',
-            margins: {
-              top: 100,
-              bottom: 100,
-              left: 100,
-              right: 100
-            }
+          new TextRun({
+            text: '\t',
+            size: 20
+          }),
+          new TextRun({
+            text: company.period,
+            size: 20
           })
         ],
-        height: { value: 300, rule: 'atLeast' }
-      })
-    );
-  }
-  
-  sections.push(
-    new Table({
-      rows: skillRows,
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      margins: {
-        top: 60,
-        bottom: 60
-      },
-      borders: {
-        top: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-        bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-        left: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-        right: { style: BorderStyle.SINGLE, size: 6, color: '000000' },
-        insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
-        insideVertical: { style: BorderStyle.SINGLE, size: 4, color: '000000' }
-      }
-    })
-  );
-  
-  // Work Experience Section
-  sections.push(
-    new Paragraph({
-      text: 'WORK EXPERIENCE',
-      heading: HeadingLevel.HEADING_1,
-      spacing: { before: 300, after: 150 },
-      border: {
-        bottom: { color: '000000', space: 1, style: 'single', size: 6 }
-      }
-    })
-  );
-  
-  // Experience entries
-  for (const exp of content.experiences) {
-    // Company and location on first line (bold)
-    sections.push(
-      new Paragraph({
-        children: [
-          new TextRun({ 
-            text: `${exp.company}, ${exp.location}`,
-            size: 22,
-            bold: true
-          })
-        ],
-        spacing: { before: 250, after: 50 },
-        alignment: AlignmentType.LEFT
+        spacing: { before: 200, after: 100 },
+        tabStops: [
+          {
+            type: TabStopType.RIGHT,
+            position: TabStopPosition.MAX
+          }
+        ]
       })
     );
     
-    // Role | Period on second line (normal weight)
-    sections.push(
-      new Paragraph({
-        children: [
-          new TextRun({ 
-            text: `${exp.role} | ${exp.period}`,
-            size: 20,
-            bold: false
-          })
-        ],
-        spacing: { after: 150 }
-      })
-    );
+    // Bullet points
+    for (const bullet of company.bullets) {
+      sections.push(
+        new Paragraph({
+          text: bullet,
+          bullet: { level: 0 },
+          size: 20,
+          spacing: { before: 50, after: 50 }  // Tighter for 8-10 bullets per company
+        })
+      );
+    }
     
-    // Bullets with bold technical terms
-    for (const bullet of exp.bullets) {
-      const parts = makeTechnicalTermsBold(bullet);
+    // Technologies Used - handle both string and object formats
+    if (company.technologies) {
+      let techText = company.technologies;
+      if (typeof company.technologies === 'object' && company.technologies !== null) {
+        // If it's an object, convert to comma-separated string
+        if (Array.isArray(company.technologies)) {
+          techText = company.technologies.join(', ');
+        } else {
+          techText = Object.values(company.technologies).flat().join(', ');
+        }
+      }
       sections.push(
         new Paragraph({
           children: [
-            new TextRun({ text: '• ', size: 20 }),
-            ...parts.map(part => new TextRun({
-              text: part.text,
-              size: 20,
-              bold: part.bold
-            }))
+            new TextRun({
+              text: 'Technologies Used: ',
+              bold: true,
+              size: 20
+            }),
+            new TextRun({
+              text: techText,
+              size: 20
+            })
           ],
-          spacing: { after: 120 }
+          spacing: { before: 100, after: 150 }
+        })
+      );
+    }
+  }
+  
+  // HANDS-ON LABS / PROJECTS (optional section)
+  if (content.handsOnLabs && Array.isArray(content.handsOnLabs) && content.handsOnLabs.length > 0) {
+    sections.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: 'HANDS-ON LABS / PROJECTS:',
+            bold: true,
+            size: 22
+          })
+        ],
+        spacing: { before: 250, after: 150 }
+      })
+    );
+    
+    // Hands-on labs bullets
+    for (const lab of content.handsOnLabs) {
+      sections.push(
+        new Paragraph({
+          text: lab,
+          bullet: { level: 0 },
+          size: 20,
+          spacing: { before: 60, after: 60 }
+        })
+      );
+    }
+  }
+  
+  // TECHNICAL SKILLS header
+  sections.push(
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: 'TECHNICAL SKILLS:',
+          bold: true,
+          size: 22
+        })
+      ],
+      spacing: { before: 250, after: 120 }  // Tighter spacing
+    })
+  );
+  
+  // Skills - handle both flat structure and nested (proven/workingKnowledge) structure
+  const skillsData = content.skills;
+  if (skillsData.proven && typeof skillsData.proven === 'object') {
+    // New nested structure
+    for (const [category, skills] of Object.entries(skillsData.proven)) {
+      sections.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `${category}: `,
+              bold: true,
+              size: 20
+            }),
+            new TextRun({
+              text: skills,
+              size: 20
+            })
+          ],
+          spacing: { before: 80, after: 80 }
+        })
+      );
+    }
+    
+    // Working Knowledge section (if present)
+    if (skillsData.workingKnowledge && typeof skillsData.workingKnowledge === 'object' && Object.keys(skillsData.workingKnowledge).length > 0) {
+      sections.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: 'WORKING KNOWLEDGE / FAMILIARITY:',
+              bold: true,
+              size: 20,
+              italics: true
+            })
+          ],
+          spacing: { before: 150, after: 100 }
+        })
+      );
+      
+      for (const [category, skills] of Object.entries(skillsData.workingKnowledge)) {
+        sections.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `${category}: `,
+                bold: true,
+                size: 20
+              }),
+              new TextRun({
+                text: skills,
+                size: 20
+              })
+            ],
+            spacing: { before: 80, after: 80 }
+          })
+        );
+      }
+    }
+  } else {
+    // Flat structure (backward compatible)
+    for (const [category, skills] of Object.entries(skillsData)) {
+      sections.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `${category}: `,
+              bold: true,
+              size: 20
+            }),
+            new TextRun({
+              text: skills,
+              size: 20
+            })
+          ],
+          spacing: { before: 80, after: 80 }
         })
       );
     }
@@ -784,10 +1291,10 @@ async function generateResumeDOCX(content) {
       properties: {
         page: {
           margin: {
-            top: convertInchesToTwip(0.5),
-            right: convertInchesToTwip(0.75),
-            bottom: convertInchesToTwip(0.5),
-            left: convertInchesToTwip(0.75)
+            top: 576,    // 0.4 inches - optimized for 2-page content
+            right: 576,
+            bottom: 576,
+            left: 576
           }
         }
       },
@@ -795,176 +1302,104 @@ async function generateResumeDOCX(content) {
     }]
   });
   
-  // Save DOCX
-  const fileName = `PoojithResume_Tailored_${Date.now()}.docx`;
-  const docxPath = path.join(TEMP_DIR, fileName);
-  
+  // Save to temp file
+  const fileName = `resume_${Date.now()}.docx`;
+  const filePath = path.join(TEMP_DIR, fileName);
   const buffer = await Packer.toBuffer(doc);
-  fs.writeFileSync(docxPath, buffer);
+  fs.writeFileSync(filePath, buffer);
   
-  return docxPath;
+  return filePath;
 }
 
-// Generate HTML preview for web display
+// Generate HTML preview
 function generateHTMLPreview(content) {
-  const boldTechTerms = (text) => {
-    const techTerms = [
-      'Java', 'J2EE', 'Spring', 'Spring Boot', 'Spring MVC', 'Spring Cloud', 'Spring Security',
-      'Hibernate', 'MyBatis', 'JPA', 'JDBC', 'REST', 'RESTful', 'SOAP', 'GraphQL',
-      'Angular', 'React', 'Node.js', 'Express.js', 'Vue.js', 'TypeScript', 'JavaScript',
-      'HTML5', 'CSS3', 'AJAX', 'jQuery', 'Bootstrap', 'Tailwind',
-      'Docker', 'Kubernetes', 'EKS', 'AWS', 'Azure', 'EC2', 'S3', 'Lambda', 'RDS',
-      'Microservices', 'Kafka', 'RabbitMQ', 'Redis', 'MongoDB', 'PostgreSQL', 'MySQL', 'Oracle',
-      'Jenkins', 'GitLab', 'GitHub', 'CI/CD', 'Terraform', 'Ansible',
-      'JUnit', 'Mockito', 'Selenium', 'Git', 'Maven', 'Gradle',
-      'Tomcat', 'JBoss', 'WebSphere', 'JSON', 'XML', 'OAuth', 'JWT',
-      'Python', 'SQL', 'NoSQL', 'Elasticsearch', 'Kibana', 'Logstash', 'ELK',
-      'Prometheus', 'Grafana', 'CloudWatch', 'Snowflake', 'Spark', 'Flink'
-    ];
-    
-    const pattern = new RegExp(`\\b(${techTerms.join('|')})\\b`, 'gi');
-    return text.replace(pattern, '<strong>$1</strong>');
-  };
+  // Handle education - convert object to string if needed
+  let educationText = content.education;
+  if (typeof content.education === 'object' && content.education !== null) {
+    if (content.education.university && content.education.degree) {
+      educationText = `${content.education.university}    ${content.education.degree}    ${content.education.dates || ''}`;
+    } else {
+      educationText = JSON.stringify(content.education);
+    }
+  }
   
   let html = `
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
   <style>
-    body {
-      font-family: Calibri, Arial, sans-serif;
-      max-width: 8.5in;
-      margin: 0 auto;
-      padding: 40px;
-      background: #fff;
-      color: #000;
-      font-size: 11pt;
-      line-height: 1.4;
-    }
-    .header {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    .header h1 {
-      font-size: 24pt;
-      margin: 0 0 5px 0;
-      font-weight: bold;
-    }
-    .header h2 {
-      font-size: 14pt;
-      margin: 0 0 10px 0;
-      font-weight: normal;
-    }
-    .contact-box {
-      background-color: #D6EAF8;
-      border: 2px solid #5DADE2;
-      padding: 10px;
-      margin: 10px 0;
-      text-align: center;
-      font-size: 10pt;
-    }
-    .linkedin {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    .linkedin a {
-      color: #0563C1;
-      text-decoration: underline;
-    }
-    .section-title {
-      font-size: 13pt;
-      font-weight: bold;
-      margin-top: 20px;
-      margin-bottom: 10px;
-      padding-bottom: 3px;
-      border-bottom: 2px solid #000;
-    }
-    .bullet {
-      margin: 8px 0;
-      padding-left: 20px;
-      text-indent: -15px;
-    }
-    table {
-      width: 100%;
-      border-collapse: separate;
-      border-spacing: 0;
-      margin: 10px 0;
-      border: 1px solid #000;
-    }
-    table tr {
-      border-bottom: 1px solid #000;
-    }
-    table td {
-      border-right: 1px solid #000;
-      padding: 8px 10px;
-      vertical-align: top;
-      background-color: #fff;
-      line-height: 1.3;
-    }
-    table td:first-child {
-      width: 22%;
-      font-weight: bold;
-      background-color: #fff;
-      border-right: 1px solid #000;
-    }
-    table td:last-child {
-      border-right: none;
-    }
-    table tr:last-child td {
-      border-bottom: none;
-    }
-    .company-header {
-      font-size: 13pt;
-      font-weight: bold;
-      margin-top: 20px;
-      margin-bottom: 4px;
-      color: #000;
-    }
-    .role-info {
-      font-size: 11pt;
-      font-weight: normal;
-      margin-bottom: 10px;
-      color: #000;
-    }
-    .role-info .date {
-      float: right;
-    }
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; }
+    h1 { font-size: 24px; margin-bottom: 5px; }
+    .contact { margin-bottom: 20px; font-size: 14px; }
+    h2 { font-size: 18px; font-weight: bold; margin-top: 30px; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
+    ul { margin: 10px 0; padding-left: 25px; }
+    li { margin: 8px 0; }
+    .company-header { font-weight: bold; margin-top: 20px; display: flex; justify-content: space-between; }
+    .tech-used { margin-top: 10px; margin-bottom: 15px; }
+    .tech-used strong { font-weight: bold; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>${content.name}</h1>
-    <h2>${content.title}</h2>
-  </div>
+  <h1>${content.name} ${content.title}</h1>
+  <div class="contact">${content.phone} | ${content.email}</div>
   
-  <div class="contact-box">
-    Phone: ${content.phone} | Email: ${content.email}
-  </div>
+  <h2>PROFESSIONAL SUMMARY:</h2>
+  <ul>
+    ${content.summary.map(p => `<li>${p}</li>`).join('')}
+  </ul>
   
-  <div class="linkedin">
-    <a href="${content.linkedin}" target="_blank">LinkedIn : ${content.linkedin}</a>
-  </div>
+  <h2>EDUCATION:</h2>
+  <p>${educationText}</p>
   
-  <div class="section-title">PROFESSIONAL SUMMARY</div>
-  ${content.summary.map(bullet => `<div class="bullet">• ${boldTechTerms(bullet)}</div>`).join('\n  ')}
-  
-  <div class="section-title">TECHNICAL SKILLS</div>
-  <table>
-  ${Object.entries(content.technicalSkills).map(([category, skills]) => 
-    `<tr><td>${category}</td><td>${skills}</td></tr>`
-  ).join('\n  ')}
-  </table>
-  
-  <div class="section-title">WORK EXPERIENCE</div>
-  ${content.experiences.map(exp => `
-  <div class="company-header">${exp.company}, ${exp.location}</div>
-  <div class="role-info">${exp.role} | ${exp.period}</div>
-  ${exp.bullets.map(bullet => `<div class="bullet">• ${boldTechTerms(bullet)}</div>`).join('\n  ')}
-  `).join('\n  ')}
-</body>
-</html>
+  <h2>WORK EXPERIENCE:</h2>
+  ${content.companies.map(c => {
+    // Handle technologies - convert object to string if needed
+    let techText = c.technologies || '';
+    if (typeof c.technologies === 'object' && c.technologies !== null) {
+      if (Array.isArray(c.technologies)) {
+        techText = c.technologies.join(', ');
+      } else {
+        techText = Object.values(c.technologies).flat().join(', ');
+      }
+    }
+    
+    return `
+    <div class="company-header">
+      <span>${c.role} @ ${c.company} | ${c.location}</span>
+      <span>${c.period}</span>
+    </div>
+    <ul>
+      ${c.bullets.map(b => `<li>${b}</li>`).join('')}
+    </ul>
+    ${techText ? `<div class="tech-used"><strong>Technologies Used:</strong> ${techText}</div>` : ''}
   `;
+  }).join('')}
+  
+  ${content.handsOnLabs && Array.isArray(content.handsOnLabs) && content.handsOnLabs.length > 0 ? `
+  <h2>HANDS-ON LABS / PROJECTS:</h2>
+  <ul>
+    ${content.handsOnLabs.map(lab => `<li>${lab}</li>`).join('')}
+  </ul>
+  ` : ''}
+  
+  <h2>TECHNICAL SKILLS:</h2>
+  ${content.skills.proven && typeof content.skills.proven === 'object' ? `
+    ${Object.entries(content.skills.proven).map(([cat, skills]) => 
+      `<p><strong>${cat}:</strong> ${skills}</p>`
+    ).join('')}
+    ${content.skills.workingKnowledge && typeof content.skills.workingKnowledge === 'object' && Object.keys(content.skills.workingKnowledge).length > 0 ? `
+      <h3 style="font-size: 16px; font-style: italic; margin-top: 20px;">WORKING KNOWLEDGE / FAMILIARITY:</h3>
+      ${Object.entries(content.skills.workingKnowledge).map(([cat, skills]) => 
+        `<p><strong>${cat}:</strong> ${skills}</p>`
+      ).join('')}
+    ` : ''}
+  ` : `
+    ${Object.entries(content.skills).map(([cat, skills]) => 
+      `<p><strong>${cat}:</strong> ${skills}</p>`
+    ).join('')}
+  `}
+</body>
+</html>`;
   
   return html;
 }
@@ -977,7 +1412,8 @@ async function extractTextFromDocx(buffer) {
 
 // Extract text from PDF
 async function extractTextFromPDF(buffer) {
-  const pdfParse = (await import('pdf-parse')).default;
-  const data = await pdfParse(Buffer.from(buffer));
+  const pdfParseModule = await import('pdf-parse');
+  const pdfParse = pdfParseModule.default || pdfParseModule;
+  const data = await pdfParse(buffer);
   return data.text;
 }
