@@ -112,14 +112,77 @@ async function parseAndTailorWithLLM(resumeText, jd, userCredentials) {
   const prompt = `You are an expert ATS resume writer creating a credible, interview-defensible resume tailored to a job description.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CORE PRINCIPLE: HONEST KEYWORD OPTIMIZATION
+CORE PRINCIPLE: INTELLIGENT TECHNOLOGY TRANSFORMATION + ATS OPTIMIZATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-GOAL: Maximize ATS score + Interview defensibility
+CRITICAL MISSION: Transform the candidate's entire tech stack to match the JD while maintaining credibility.
+
+GOAL: 100% ATS keyword match + Interview defensibility
 - Include ALL JD keywords (Summary, Experience, Skills, Labs)
-- Transform entire resume to match JD stack where plausible
+- **TRANSFORM technologies throughout resume** to match JD stack (Java↔Python, AWS↔Azure, React↔Angular, etc.)
+- Replace similar technologies across ALL sections (Summary, Experience, Skills)
 - Use "safe placement" strategies for any remaining technologies
 - Maintain domain coherence and seniority-appropriate language
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TECHNOLOGY TRANSFORMATION MATRIX (Apply Throughout Resume)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**PROGRAMMING LANGUAGES:**
+- If JD has Python → Replace Java with Python, mention Django/Flask instead of Spring
+- If JD has Java → Replace Python with Java, mention Spring Boot instead of Django
+- If JD has Node.js → Emphasize JavaScript/TypeScript, Express.js
+- If JD has Go → Replace with Go, mention Gin/Echo frameworks
+- If JD has C# → Replace with C#, mention .NET Core/ASP.NET
+
+**FRONTEND FRAMEWORKS:**
+- If JD has React → Replace Angular with React, Redux, React Hooks
+- If JD has Angular → Replace React with Angular, RxJS, TypeScript
+- If JD has Vue.js → Replace with Vue.js, Vuex, Vue Router
+- Keep HTML5, CSS3, JavaScript, TypeScript (universal)
+
+**CLOUD PLATFORMS:**
+- If JD has AWS → Replace Azure/GCP with AWS services (EC2, S3, Lambda, RDS, ECS, CloudWatch)
+- If JD has Azure → Replace AWS/GCP with Azure services (VMs, Blob Storage, Functions, SQL Database, AKS, Monitor)
+- If JD has GCP → Replace AWS/Azure with GCP services (Compute Engine, Cloud Storage, Cloud Functions, Cloud SQL, GKE)
+
+**DATABASES:**
+- If JD has PostgreSQL → Emphasize PostgreSQL, de-emphasize MySQL
+- If JD has MongoDB → Emphasize MongoDB, NoSQL expertise
+- If JD has MySQL → Emphasize MySQL over PostgreSQL
+- If JD has DynamoDB → Replace with DynamoDB (AWS NoSQL)
+- If JD has Cassandra → Emphasize Cassandra for distributed databases
+- If JD has Redis → Always include Redis (universal caching)
+
+**CONTAINERIZATION & ORCHESTRATION:**
+- If JD has Docker → Always include Docker
+- If JD has Kubernetes → Emphasize Kubernetes, Helm, kubectl
+- If JD has OpenShift → Replace/add OpenShift
+- If JD has ECS/Fargate → Emphasize AWS container services
+
+**MESSAGE QUEUES:**
+- If JD has Kafka → Replace RabbitMQ with Kafka, emphasize event streaming
+- If JD has RabbitMQ → Replace Kafka with RabbitMQ, emphasize message queuing
+- If JD has AWS SQS/SNS → Emphasize AWS messaging services
+- If JD has Azure Service Bus → Emphasize Azure messaging
+
+**CI/CD TOOLS:**
+- If JD has Jenkins → Emphasize Jenkins pipelines
+- If JD has GitLab CI → Replace Jenkins with GitLab CI/CD
+- If JD has GitHub Actions → Emphasize GitHub Actions workflows
+- If JD has CircleCI → Replace with CircleCI
+- Always keep: Git, Maven/Gradle (universal)
+
+**APPLY TRANSFORMATIONS EVERYWHERE:**
+1. **Professional Summary:** Replace tech stack to match JD
+2. **Work Experience Bullets:** Transform technologies in each bullet
+3. **Technical Skills Section:** List JD technologies first and prominently
+4. **Technologies Used per Company:** Match JD tech stack
+
+**EXAMPLE TRANSFORMATION:**
+- Original: "Developed microservices using Java Spring Boot deployed on AWS ECS"
+- If JD wants Python + Azure: "Developed microservices using Python Django deployed on Azure AKS"
+- If JD wants Node.js + GCP: "Developed microservices using Node.js Express deployed on GCP Cloud Run"
 
 JOB DESCRIPTION:
 ${jd}
@@ -257,28 +320,70 @@ STRUCTURE REQUIREMENTS
    - Cross-domain contamination (IoT keywords in healthcare, finance keywords in education)
    - Scope inflation for seniority level
 
-3. TECHNICAL SKILLS (Organized in 2 sections)
+3. TECHNICAL SKILLS (Professional Format - Match Exact Category Structure)
    
-   Section A: PROVEN SKILLS (6-8 categories)
-   - Include ALL JD technologies
-   - Transform candidate's tech stack to match JD where plausible
-   - Categories: Languages, Cloud, Databases, Frameworks, DevOps, Messaging, etc.
+   **CRITICAL:** Use these EXACT category names and structure (ATS-optimized format):
    
-   Section B: FAMILIARITY / WORKING KNOWLEDGE (2-3 categories) - OPTIONAL
-   - List JD technologies NOT easily provable in work experience
-   - Group by category: "Container Orchestration (Learning): Kubernetes, Helm"
-   - Be honest: "Currently expanding knowledge through hands-on projects"
+   REQUIRED CATEGORIES (Include ALL that apply to JD):
    
-   Example:
-   PROVEN SKILLS:
-     - Languages: Go, Python, Java, JavaScript (from JD)
-     - Databases: PostgreSQL, MongoDB, Redis (from JD)
-     - DevOps: Jenkins, GitLab CI, Docker, Kubernetes (from JD)
+   1. **Programming Languages:** List ALL from JD first (Python, Java, JavaScript, Go, C#, TypeScript, etc.)
+   2. **Web Frameworks:** Match JD stack (Spring Boot, Django, Flask, FastAPI, Express.js, ASP.NET, etc.)
+   3. **Frontend Frameworks:** Match JD (React, Angular, Vue.js, Next.js, etc.) + HTML5, CSS3, JavaScript
+   4. **Databases:** ALL from JD (PostgreSQL, MongoDB, MySQL, Redis, DynamoDB, Cassandra, Oracle, etc.)
+   5. **Cloud Platforms:** Match JD cloud (AWS services OR Azure services OR GCP services - be specific)
+      - AWS: EC2, S3, Lambda, RDS, ECS, CloudWatch, IAM, VPC
+      - Azure: VMs, Blob Storage, Functions, SQL Database, AKS, Monitor
+      - GCP: Compute Engine, Cloud Storage, Cloud Functions, Cloud SQL, GKE
+   6. **Containerization:** Docker (if in JD), Kubernetes, Helm, OpenShift
+   7. **DevOps & CI/CD:** Jenkins, GitLab CI, GitHub Actions, Git, Maven, Gradle, Terraform, Ansible
+   8. **API & Web Services:** REST, GraphQL, SOAP, Swagger/OpenAPI, Postman
+   9. **Messaging & Streaming:** Kafka, RabbitMQ, AWS SQS/SNS, Azure Service Bus, Redis Pub/Sub
+   10. **Testing Frameworks:** Pytest, JUnit, Mockito, Jest, Karma, Selenium, Cucumber
    
-   WORKING KNOWLEDGE (optional):
-     - Service Mesh & Networking: Istio, OpenVPN (hands-on labs)
+   **FORMATTING RULES:**
+   - Use EXACT category names as shown above (e.g., "Programming Languages:" not "Languages:")
+   - List JD technologies FIRST in each category
+   - Be specific with cloud services (not just "AWS" but "AWS (EC2, S3, Lambda, RDS)")
+   - Include 8-10 categories total (comprehensive but not overwhelming)
+   - Each category: 3-8 technologies, comma-separated
+   
+   **TECHNOLOGY TRANSFORMATION (Apply to Skills Section):**
+   - If JD wants Python → List Python first, include Django/Flask
+   - If JD wants Java → List Java first, include Spring Boot/Spring MVC
+   - If JD wants AWS → List AWS services comprehensively
+   - If JD wants Azure → Replace AWS with equivalent Azure services
+   - If JD wants React → List React, Redux, React Hooks
+   - If JD wants Angular → List Angular, RxJS, TypeScript
+   
+   Example (AWS + Python + React):
+   ```
+   Programming Languages: Python, Java, JavaScript, TypeScript, SQL
+   Web Frameworks: Django, Flask, FastAPI, Spring Boot, Express.js
+   Frontend Frameworks: React, Redux, React Hooks, HTML5, CSS3, JavaScript
+   Databases: PostgreSQL, MongoDB, Redis, MySQL, DynamoDB
+   Cloud Platforms: AWS (EC2, S3, Lambda, RDS, ECS, CloudWatch, IAM, VPC)
+   Containerization: Docker, Kubernetes, Helm, ECS
+   DevOps & CI/CD: Jenkins, GitLab CI, GitHub Actions, Git, Maven, Terraform
+   API & Web Services: REST, GraphQL, Swagger UI, Postman
+   Messaging & Streaming: Kafka, RabbitMQ, AWS SQS, AWS SNS
+   Testing Frameworks: Pytest, JUnit, Mockito, Jest, Selenium
+   ```
+   
+   Example (Azure + Java + Angular):
+   ```
+   Programming Languages: Java, JavaScript, TypeScript, Python, SQL
+   Web Frameworks: Spring Boot, Spring MVC, Hibernate, ASP.NET Core
+   Frontend Frameworks: Angular, RxJS, TypeScript, HTML5, CSS3
+   Databases: Azure SQL Database, PostgreSQL, MongoDB, Redis, MySQL
+   Cloud Platforms: Azure (VMs, Blob Storage, Functions, SQL Database, AKS, Monitor, IAM)
+   Containerization: Docker, Kubernetes, Helm, Azure AKS
+   DevOps & CI/CD: Azure DevOps, Jenkins, GitHub Actions, Git, Maven, Terraform
+   API & Web Services: REST, GraphQL, Swagger UI, Postman
+   Messaging & Streaming: Azure Service Bus, Kafka, RabbitMQ
+   Testing Frameworks: JUnit, Mockito, Jest, Jasmine, Selenium, Cucumber
+   ```
 
-4. HANDS-ON LABS / PROJECTS (OPTIONAL - 4-6 bullets)
+4. HANDS-ON LABS / PROJECTS (OPTIONAL - Use only if needed for remaining keywords)
    
    Purpose: Capture remaining JD keywords ethically
    
@@ -382,15 +487,16 @@ Return JSON:
     }
   ],
   "skills": {
-    "proven": {
-      "Languages": "ALL from JD",
-      "Cloud": "ALL from JD",
-      "Databases": "ALL from JD",
-      "DevOps": "ALL from JD"
-    },
-    "workingKnowledge": {
-      "Category": "Remaining JD tech (if any)"
-    }
+    "Programming Languages": "List ALL from JD (Python, Java, JavaScript, Go, TypeScript, etc.)",
+    "Web Frameworks": "Match JD stack (Spring Boot, Django, Flask, FastAPI, Express.js, etc.)",
+    "Frontend Frameworks": "Match JD (React, Angular, Vue.js, etc.) + HTML5, CSS3",
+    "Databases": "ALL from JD (PostgreSQL, MongoDB, MySQL, Redis, DynamoDB, etc.)",
+    "Cloud Platforms": "Match JD - AWS (EC2, S3, Lambda, RDS) OR Azure (VMs, Blob, AKS) OR GCP",
+    "Containerization": "Docker, Kubernetes, Helm (if in JD)",
+    "DevOps & CI/CD": "Jenkins, GitLab CI, GitHub Actions, Git, Maven, Gradle, Terraform",
+    "API & Web Services": "REST, GraphQL, SOAP, Swagger UI, Postman",
+    "Messaging & Streaming": "Kafka, RabbitMQ, AWS SQS, Azure Service Bus (match JD)",
+    "Testing Frameworks": "Pytest, JUnit, Mockito, Jest, Selenium (match JD language)"
   },
   "handsOnLabs": [
     "Built gRPC microservices POC (if needed for remaining JD tech)",
@@ -399,6 +505,13 @@ Return JSON:
   ],
   "education": "University    Degree    Dates (PLAIN TEXT STRING)"
 }
+
+**CRITICAL INSTRUCTIONS FOR SKILLS SECTION:**
+- Use EXACT category names as shown: "Programming Languages:", "Web Frameworks:", etc.
+- Transform technologies to match JD throughout (Java→Python if JD wants Python)
+- List JD technologies FIRST in each category
+- Include 8-10 categories that apply to the JD
+- Be specific with cloud services: "AWS (EC2, S3, Lambda, RDS, ECS, CloudWatch)" not just "AWS"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FINAL REMINDERS
