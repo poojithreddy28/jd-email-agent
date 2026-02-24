@@ -106,11 +106,81 @@ export async function POST(req) {
   }
 }
 
-// LLM-based parsing and tailoring (replaces manual regex parsing)
-async function parseAndTailorWithLLM(resumeText, jd, userCredentials) {
-  console.log('🤖 Using LLM to parse and tailor resume...');
+// Get appropriate prompt based on LLM provider capabilities
+function getPromptForProvider(provider, jd, resumeText) {
+  // Sarvam AI has 7168 token limit - use condensed prompt with truncation
+  if (provider === 'sarvam') {
+    return getCondensedPromptWithTruncation(jd, resumeText);
+  }
+  // Ollama has no limit - use full detailed prompt
+  return getFullPrompt(jd, resumeText);
+}
+
+// Estimate token count (rough: 1 token ≈ 3.5 characters for English text)
+function estimateTokens(text) {
+  return Math.ceil(text.length / 3.5);
+}
+
+// Truncate text to fit within token limit
+function truncateToTokenLimit(text, maxTokens) {
+  const maxChars = Math.floor(maxTokens * 3.5);
+  if (text.length <= maxChars) return text;
+  return text.substring(0, maxChars) + '\n...[truncated for token limit]';
+}
+
+// Condensed prompt with automatic truncation for Sarvam AI (7168 token limit)
+function getCondensedPromptWithTruncation(jd, resumeText) {
+  const MAX_TOKENS = 7168;
+  const PROMPT_OVERHEAD = 450; // Reduced overhead for ultra-minimal prompt
+  const AVAILABLE_TOKENS = MAX_TOKENS - PROMPT_OVERHEAD;
   
-  const prompt = `You are an expert ATS resume writer creating a credible, interview-defensible resume tailored to a job description.
+  // Allocate tokens: 30% for JD, 70% for resume (resume has more company details)
+  const jdTokens = Math.floor(AVAILABLE_TOKENS * 0.30);
+  const resumeTokens = Math.floor(AVAILABLE_TOKENS * 0.70);
+  
+  const truncatedJD = truncateToTokenLimit(jd, jdTokens);
+  const truncatedResume = truncateToTokenLimit(resumeText, resumeTokens);
+  
+  const finalPrompt = getCondensedPrompt(truncatedJD, truncatedResume);
+  const estimatedTotal = estimateTokens(finalPrompt);
+  
+  console.log(`📊 Token estimation: JD=${estimateTokens(truncatedJD)}, Resume=${estimateTokens(truncatedResume)}, Total=${estimatedTotal}/${MAX_TOKENS}`);
+  console.log(`🎯 Output capacity: ~${16000} tokens available for complete resume generation`);
+  
+  if (estimatedTotal > MAX_TOKENS) {
+    console.warn(`⚠️ Estimated tokens (${estimatedTotal}) exceeds limit (${MAX_TOKENS}). May still fail.`);
+  }
+  
+  return finalPrompt;
+}
+
+// Condensed prompt for token-limited providers (Sarvam AI: 7168 tokens)
+function getCondensedPrompt(jd, resumeText) {
+  return `Parse and tailor resume to JD. Return complete JSON structure.
+
+JD: ${jd}
+
+RESUME: ${resumeText}
+
+Output JSON with ALL companies (3-4 bullets each - will expand later), ALL skills. Use JD keywords.
+
+{
+"name":"Full Name",
+"title":"JD Title",
+"email":"email",
+"phone":"phone",
+"summary":["[Title] with X+ years in [domain], specializing in [JD tech]","5 more bullets"],
+"companies":[{"role":"Role","company":"Company","location":"Location","period":"Dates","bullets":["3-4 bullets with JD tech"],"technologies":"Tech1, Tech2"}],
+"skills":{"proven":{"Languages":"all from JD","Cloud":"all from JD","Databases":"all from JD","DevOps":"all from JD"}},
+"education":"Uni Degree Dates"
+}
+
+List EVERY company from resume. Close all braces. Output:`;
+}
+
+// Full detailed prompt for providers without token limits (Ollama)
+function getFullPrompt(jd, resumeText) {
+  return `You are an expert ATS resume writer creating a credible, interview-defensible resume tailored to a job description.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CORE PRINCIPLE: HONEST KEYWORD OPTIMIZATION
@@ -413,6 +483,15 @@ FINAL REMINDERS
 ⚠️ AVOID: Cross-domain claims that don't make sense
 
 Now generate the resume. Return ONLY valid JSON, no explanations:`;
+}
+
+// LLM-based parsing and tailoring (replaces manual regex parsing)
+async function parseAndTailorWithLLM(resumeText, jd, userCredentials) {
+  console.log('🤖 Using LLM to parse and tailor resume...');
+  
+  // Get appropriate prompt based on provider capabilities
+  const provider = getLLMConfig().provider;
+  const prompt = getPromptForProvider(provider, jd, resumeText);
 
   try {
     console.log(`🤖 LLM Provider: ${getLLMConfig().provider.toUpperCase()} (${getLLMConfig().model})`);
