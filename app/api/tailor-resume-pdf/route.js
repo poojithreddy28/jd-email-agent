@@ -108,8 +108,32 @@ export async function POST(req) {
 // LLM-based parsing and tailoring (replaces manual regex parsing)
 async function parseAndTailorWithLLM(resumeText, jd, userCredentials) {
   console.log('🤖 Using LLM to parse and tailor resume...');
+  console.log('📋 User Credentials Received:');
+  console.log(`   Name: ${userCredentials.name}`);
+  console.log(`   Email: ${userCredentials.email}`);
+  console.log(`   Phone: ${userCredentials.phone}`);
+  console.log(`   Title: ${userCredentials.title}`);
   
   const prompt = `You are an expert ATS resume writer creating a credible, interview-defensible resume tailored to a job description.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚨 CRITICAL: USE THESE EXACT CREDENTIALS - DO NOT EXTRACT FROM RESUME 🚨
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**MANDATORY: Use these EXACT values in the JSON output. DO NOT change or extract from resume text:**
+
+CANDIDATE NAME (REQUIRED): ${userCredentials.name}
+CANDIDATE EMAIL (REQUIRED): ${userCredentials.email}
+CANDIDATE PHONE (REQUIRED): ${userCredentials.phone}
+CANDIDATE TITLE (REQUIRED - from JD): ${userCredentials.title || 'Extract job title from JD'}
+
+⚠️ VALIDATION RULES:
+1. The "name" field in your JSON output MUST exactly match: "${userCredentials.name}"
+2. The "email" field in your JSON output MUST exactly match: "${userCredentials.email}"
+3. The "phone" field in your JSON output MUST exactly match: "${userCredentials.phone}"
+4. The "title" field should be the job title from the JD (e.g., "Senior Software Engineer", "Backend Developer")
+5. DO NOT extract name, email, or phone from the resume text - use the values above
+6. If you use any other name, email, or phone, the resume will be REJECTED
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CORE PRINCIPLE: INTELLIGENT TECHNOLOGY TRANSFORMATION + ATS OPTIMIZATION
@@ -356,7 +380,7 @@ STRUCTURE REQUIREMENTS
    - If JD wants Angular → List Angular, RxJS, TypeScript
    
    Example (AWS + Python + React):
-   ```
+   
    Programming Languages: Python, Java, JavaScript, TypeScript, SQL
    Web Frameworks: Django, Flask, FastAPI, Spring Boot, Express.js
    Frontend Frameworks: React, Redux, React Hooks, HTML5, CSS3, JavaScript
@@ -367,10 +391,9 @@ STRUCTURE REQUIREMENTS
    API & Web Services: REST, GraphQL, Swagger UI, Postman
    Messaging & Streaming: Kafka, RabbitMQ, AWS SQS, AWS SNS
    Testing Frameworks: Pytest, JUnit, Mockito, Jest, Selenium
-   ```
    
    Example (Azure + Java + Angular):
-   ```
+   
    Programming Languages: Java, JavaScript, TypeScript, Python, SQL
    Web Frameworks: Spring Boot, Spring MVC, Hibernate, ASP.NET Core
    Frontend Frameworks: Angular, RxJS, TypeScript, HTML5, CSS3
@@ -381,7 +404,6 @@ STRUCTURE REQUIREMENTS
    API & Web Services: REST, GraphQL, Swagger UI, Postman
    Messaging & Streaming: Azure Service Bus, Kafka, RabbitMQ
    Testing Frameworks: JUnit, Mockito, Jest, Jasmine, Selenium, Cucumber
-   ```
 
 4. HANDS-ON LABS / PROJECTS (OPTIONAL - Use only if needed for remaining keywords)
    
@@ -437,29 +459,32 @@ VALIDATION CHECKLIST (Before returning resume)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Verify:
-1. ✅ ALL JD keywords appear at least once (Summary, Experience, Skills, or Labs)
-2. ✅ Production claims transformed to match JD stack where plausible
-3. ✅ Each company's bullets match their actual industry domain
-4. ✅ Remaining unproven JD tech in "Hands-on Labs" or "Working Knowledge" sections (if needed)
-5. ✅ Action verbs match candidate's seniority level
-6. ✅ No domain-contradicting claims (IoT at healthcare company unless adjacent)
-7. ✅ 8-10 bullets per company (proven + adapted + transferable)
-8. ✅ "Hands-on Labs" section present with 4-6 bullets (if needed for remaining keywords)
-9. ✅ Skills include ALL JD technologies
-10. ✅ All bullets are interview-defensible (candidate can explain)
+1. 🚨 CRITICAL: "name" = "${userCredentials.name}", "email" = "${userCredentials.email}", "phone" = "${userCredentials.phone}"
+2. ✅ ALL JD keywords appear at least once (Summary, Experience, Skills, or Labs)
+3. ✅ Production claims transformed to match JD stack where plausible
+4. ✅ Each company's bullets match their actual industry domain
+5. ✅ Remaining unproven JD tech in "Hands-on Labs" or "Working Knowledge" sections (if needed)
+6. ✅ Action verbs match candidate's seniority level
+7. ✅ No domain-contradicting claims (IoT at healthcare company unless adjacent)
+8. ✅ 8-10 bullets per company (proven + adapted + transferable)
+9. ✅ "Hands-on Labs" section present with 4-6 bullets (if needed for remaining keywords)
+10. ✅ Skills include ALL JD technologies
+11. ✅ All bullets are interview-defensible (candidate can explain)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT FORMAT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+🚨 CRITICAL: Use the EXACT credentials provided at the top of this prompt 🚨
+
 Return JSON:
 {
-  "name": "Candidate Name",
-  "title": "Job title from JD",
-  "email": "email@example.com",
-  "phone": "123-456-7890",
+  "name": "${userCredentials.name}",
+  "title": "[Extract EXACT job title from JD - e.g., Senior Software Engineer, Backend Developer, Full Stack Developer]",
+  "email": "${userCredentials.email}",
+  "phone": "${userCredentials.phone}",
   "summary": [
-    "FIRST: [Job Title] with [X]+ years of experience in [domain], specializing in [key tech stack]. Proven track record in [achievements] across [systems/domains]. (150-250 chars)",
+    "FIRST: [Job Title from JD] with [X]+ years of experience in [domain], specializing in [key tech stack]. Proven track record in [achievements] across [systems/domains]. (150-250 chars)",
     "Bullet 2: Proven skill with specific technologies and outcomes (150-250 chars)",
     "Bullet 3: Technical expertise with metrics or impact (150-250 chars)",
     "Bullet 4: JD keyword - adapted with context (150-250 chars)",
@@ -517,12 +542,20 @@ Return JSON:
 FINAL REMINDERS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+🚨 CRITICAL VALIDATION - DOUBLE CHECK BEFORE RETURNING:
+1. ✅ "name" field = "${userCredentials.name}" (EXACT MATCH REQUIRED)
+2. ✅ "email" field = "${userCredentials.email}" (EXACT MATCH REQUIRED)
+3. ✅ "phone" field = "${userCredentials.phone}" (EXACT MATCH REQUIRED)
+4. ✅ "title" field = Job title from JD (e.g., "Senior Software Engineer", "Backend Developer")
+
 ✅ GOAL: 100% JD keyword coverage + interview defensibility
 ✅ STRATEGY: Transform entire resume to JD stack + safe placement for remaining tech
 ✅ OUTCOME: Pass ATS + Pass recruiter + Pass hiring manager + Pass interview
 
-⚠️ MAINTAIN: Domain coherence, seniority-appropriate verbs
-⚠️ AVOID: Cross-domain claims that don't make sense
+⚠️ MAINTAIN: Domain coherence, seniority-appropriate verbs, EXACT user credentials
+⚠️ AVOID: Cross-domain claims, wrong name/email/phone
+
+🚨 IF YOU USE ANY OTHER NAME, EMAIL, OR PHONE - THE RESUME WILL BE REJECTED 🚨
 
 Now generate the resume. Return ONLY valid JSON, no explanations:`;
 
@@ -718,16 +751,42 @@ Return ONLY the new bullet points, one per line, without numbers or bullet symbo
       throw new Error(`LLM returned invalid JSON: ${parseError.message}. The model may be truncating output. Try with a shorter JD or resume.`);
     }
 
-    // Merge with user credentials (use LLM data as base, override with user input if provided)
+    // Merge with user credentials - ALWAYS use provided credentials, never LLM-extracted ones
+    console.log('\n🔍 Validating LLM output credentials...');
+    
+    // Validate that LLM used correct credentials
+    if (parsedData.name !== userCredentials.name) {
+      console.warn(`⚠️  LLM returned wrong name: "${parsedData.name}" (expected: "${userCredentials.name}")`);
+      console.warn(`   → OVERRIDING with correct name: "${userCredentials.name}"`);
+    } else {
+      console.log(`✅ Name matches: "${userCredentials.name}"`);
+    }
+    
+    if (parsedData.email !== userCredentials.email) {
+      console.warn(`⚠️  LLM returned wrong email: "${parsedData.email}" (expected: "${userCredentials.email}")`);
+      console.warn(`   → OVERRIDING with correct email: "${userCredentials.email}"`);
+    } else {
+      console.log(`✅ Email matches: "${userCredentials.email}"`);
+    }
+    
+    if (parsedData.phone !== userCredentials.phone) {
+      console.warn(`⚠️  LLM returned wrong phone: "${parsedData.phone}" (expected: "${userCredentials.phone}")`);
+      console.warn(`   → OVERRIDING with correct phone: "${userCredentials.phone}"`);
+    } else {
+      console.log(`✅ Phone matches: "${userCredentials.phone}"`);
+    }
+    
+    // ALWAYS use userCredentials - never trust LLM for contact info
     return {
-      name: userCredentials.name || parsedData.name,
-      title: userCredentials.title || parsedData.title,
-      email: userCredentials.email || parsedData.email,
-      phone: userCredentials.phone || parsedData.phone,
+      name: userCredentials.name,  // ALWAYS use provided name
+      title: parsedData.title || userCredentials.title,  // Use LLM title (from JD), fallback to provided
+      email: userCredentials.email,  // ALWAYS use provided email
+      phone: userCredentials.phone,  // ALWAYS use provided phone
       summary: parsedData.summary || [],
       companies: parsedData.companies || [],
       skills: parsedData.skills || {},
-      education: parsedData.education || ''
+      education: parsedData.education || '',
+      handsOnLabs: parsedData.handsOnLabs || []
     };
     
   } catch (error) {

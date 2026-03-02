@@ -82,7 +82,13 @@ Subject rules:
 - Use this format: "Application for {Role} - {Location}"
 - If no location is found, use: "Application for {Role}"
 
-Return ONLY valid JSON with keys: subject, body, recipientEmail
+CRITICAL JSON FORMATTING RULES:
+- Return ONLY valid JSON with keys: subject, body, recipientEmail
+- Each JSON value MUST be on a SINGLE line (no line breaks within strings)
+- Use \\n for line breaks within the body text
+- Example: "body": "Hi John,\\nI am excited to apply..."
+- Do NOT break strings across multiple lines
+- Ensure the JSON is properly formatted with all commas and quotes in place
 `;
 
   try {
@@ -105,28 +111,100 @@ Return ONLY valid JSON with keys: subject, body, recipientEmail
   // Ollama returns { response: "..." }
   // response should be JSON; parse safely:
   let parsed;
+  
+  // Extract JSON from response
+  const jsonStart = data.response.indexOf("{");
+  const jsonEnd = data.response.lastIndexOf("}");
+  let jsonString = '';
+  
+  if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+    jsonString = data.response.slice(jsonStart, jsonEnd + 1);
+  } else {
+    jsonString = data.response.trim();
+  }
+  
+  // Try parsing with multiple strategies
   try {
-    // First, try to extract JSON from the response (in case model adds extra text)
-    const jsonStart = data.response.indexOf("{");
-    const jsonEnd = data.response.lastIndexOf("}");
-    
-    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-      const jsonPart = data.response.slice(jsonStart, jsonEnd + 1);
-      parsed = JSON.parse(jsonPart);
-    } else {
-      // If no JSON brackets found, try parsing the whole response
-      parsed = JSON.parse(data.response.trim());
+    // Strategy 1: Try as-is first
+    parsed = JSON.parse(jsonString);
+  } catch {
+    try {
+      // Strategy 2: Fix literal newlines inside JSON string values
+      // The LLM often puts actual newlines inside strings which breaks JSON parsing
+      let fixedJson = jsonString;
+      
+      // Replace literal newlines within string values with escaped \n
+      // This regex finds content between quotes and replaces newlines with \n
+      fixedJson = fixedJson.replace(/"([^"]*?)"/gs, (match, content) => {
+        // Only fix the content, not the quotes
+        const fixed = content
+          .replace(/\n/g, '\\n')    // Replace literal newlines with \n
+          .replace(/\r/g, '')        // Remove carriage returns
+          .replace(/\t/g, '\\t');    // Escape tabs
+        return `"${fixed}"`;
+      });
+      
+      parsed = JSON.parse(fixedJson);
+    } catch (e2) {
+      console.error('JSON parse failed after sanitization:', e2);
+      console.error('Attempted to parse:', jsonString.substring(0, 500));
+      
+      // Strategy 3: Manual extraction - try to extract values with regex
+      try {
+        const subjectMatch = jsonString.match(/"subject"\s*:\s*"([^"]+)"/);
+        const emailMatch = jsonString.match(/"recipientEmail"\s*:\s*"([^"]+)"/);
+        
+        // For body, extract everything between "body": " and the closing "
+        let bodyMatch = null;
+        const bodyStart = jsonString.indexOf('"body"');
+        if (bodyStart !== -1) {
+          const afterBody = jsonString.substring(bodyStart);
+          const firstQuote = afterBody.indexOf('"', afterBody.indexOf(':') + 1);
+          if (firstQuote !== -1) {
+            // Find the matching closing quote (looking for ",\n or "\n})
+            let quotePos = firstQuote + 1;
+            let body = '';
+            while (quotePos < afterBody.length) {
+              if (afterBody[quotePos] === '"' && 
+                  (afterBody[quotePos + 1] === ',' || 
+                   afterBody[quotePos + 1] === '\n' || 
+                   afterBody.substring(quotePos + 1, quotePos + 3) === '\n}')) {
+                body = afterBody.substring(firstQuote + 1, quotePos);
+                break;
+              }
+              quotePos++;
+            }
+            if (body) bodyMatch = [null, body];
+          }
+        }
+        
+        if (subjectMatch && bodyMatch && emailMatch) {
+          parsed = {
+            subject: subjectMatch[1],
+            body: bodyMatch[1].trim(),
+            recipientEmail: emailMatch[1]
+          };
+          console.log('✅ Extracted email via manual parsing');
+        } else {
+          throw new Error('Could not extract all fields');
+        }
+      } catch (e3) {
+        console.error('Manual extraction also failed:', e3);
+        
+        // Last resort: Use whatever we can extract from the response
+        parsed = {
+          subject: "Job Application - " + (company || "Interested Position"),
+          body: data.response.includes('"body"') 
+            ? data.response.substring(
+                data.response.indexOf('"body"'), 
+                Math.min(data.response.length, data.response.indexOf('"body"') + 500)
+              ).replace(/^"body"\s*:\s*"/, '').replace(/"[,\s]*$/, '').trim()
+            : "I am writing to express my interest in the position described in your job posting. As a Java Full Stack Developer with extensive experience in backend and frontend technologies, I am confident that my skills align well with your requirements. I would welcome the opportunity to discuss how my expertise can contribute to your team's success.",
+          recipientEmail: recipientEmail
+        };
+        console.log('⚠️ Using partial/fallback response');
+      }
     }
-  } catch (e) {
-    console.error('JSON parse failed:', e);
-    console.error('Response was:', data.response);
-    
-    // Ultimate fallback - create a structured response
-    parsed = {
-      subject: "Job Application - " + (company || "Interested Position"),
-      body: "I am writing to express my interest in the position described in your job posting. As a Java Full Stack Developer with extensive experience in backend and frontend technologies, I am confident that my skills align well with your requirements. I would welcome the opportunity to discuss how my expertise can contribute to your team's success.",
-      recipientEmail: recipientEmail
-    };
   }
 
   // Add signature to body and recipient email

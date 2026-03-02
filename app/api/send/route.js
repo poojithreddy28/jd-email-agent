@@ -28,11 +28,11 @@ export async function POST(req) {
     filename = `${fromName}_Resume.${fileExtension}`;
   } else if (useDefaultResume === 'true') {
     // Use default Word document resume from root directory
-    const defaultResumePath = join(process.cwd(), 'Poojith Java Full Stack Developer.docx');
+    const defaultResumePath = join(process.cwd(), 'Poojith_Java_Full_Stack_Developer.docx');
     
     if (existsSync(defaultResumePath)) {
       tempPath = defaultResumePath; // Use the file directly from root
-      filename = 'Poojith_Reddy_Java_Developer_Resume.docx';
+      filename = 'Poojith_Java_Full_Stack_Developer.docx';
     } else {
       // Fallback: create a simple text version if .docx doesn't exist
       const defaultResumeContent = `
@@ -51,7 +51,7 @@ SKILLS:
 • Git, CI/CD, Agile
 
 EXPERIENCE:
-Full Stack Developer with 3+ years of experience in developing scalable web applications using Java and modern frontend frameworks.
+Full Stack Developer with 11+ years of experience in developing scalable web applications using Java and modern frontend frameworks.
 
 EDUCATION:
 Computer Science - Strong foundation in software development principles and best practices.
