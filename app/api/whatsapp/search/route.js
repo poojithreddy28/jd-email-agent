@@ -69,18 +69,30 @@ export async function POST(request) {
     // Get the WhatsApp client from the connect route
     const { getWhatsAppClient, isWhatsAppReady } = await import('../connect/route.js');
     
-    if (!isWhatsAppReady()) {
+    const clientReady = isWhatsAppReady();
+    const client = getWhatsAppClient();
+    
+    console.log(`📱 WhatsApp Client Status: Ready=${clientReady}, Client exists=${!!client}`);
+    
+    if (!clientReady) {
+      console.error('❌ WhatsApp client not ready. Please scan QR code or wait for authentication.');
       return NextResponse.json(
-        { error: 'WhatsApp not connected. Please connect first.' },
+        { 
+          error: 'WhatsApp not connected or not ready. Please connect first and ensure you have scanned the QR code.',
+          clientExists: !!client,
+          isReady: clientReady
+        },
         { status: 400 }
       );
     }
-    
-    const client = getWhatsAppClient();
 
     if (!client) {
+      console.error('❌ WhatsApp client not available');
       return NextResponse.json(
-        { error: 'WhatsApp client not available' },
+        { 
+          error: 'WhatsApp client not available. Please try connecting again.',
+          isReady: clientReady
+        },
         { status: 400 }
       );
     }

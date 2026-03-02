@@ -3,7 +3,6 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Unde
 import fs from 'fs';
 import path from 'path';
 import mammoth from 'mammoth';
-import { generateLLM, getLLMConfig } from '@/lib/llmProvider.js';
 
 const TEMP_DIR = path.join(process.cwd(), 'temp');
 
@@ -106,91 +105,108 @@ export async function POST(req) {
   }
 }
 
-// Get appropriate prompt based on LLM provider capabilities
-function getPromptForProvider(provider, jd, resumeText) {
-  // Sarvam AI has 7168 token limit - use condensed prompt with truncation
-  if (provider === 'sarvam') {
-    return getCondensedPromptWithTruncation(jd, resumeText);
-  }
-  // Ollama has no limit - use full detailed prompt
-  return getFullPrompt(jd, resumeText);
-}
-
-// Estimate token count (rough: 1 token ≈ 3.5 characters for English text)
-function estimateTokens(text) {
-  return Math.ceil(text.length / 3.5);
-}
-
-// Truncate text to fit within token limit
-function truncateToTokenLimit(text, maxTokens) {
-  const maxChars = Math.floor(maxTokens * 3.5);
-  if (text.length <= maxChars) return text;
-  return text.substring(0, maxChars) + '\n...[truncated for token limit]';
-}
-
-// Condensed prompt with automatic truncation for Sarvam AI (7168 token limit)
-function getCondensedPromptWithTruncation(jd, resumeText) {
-  const MAX_TOKENS = 7168;
-  const PROMPT_OVERHEAD = 450; // Reduced overhead for ultra-minimal prompt
-  const AVAILABLE_TOKENS = MAX_TOKENS - PROMPT_OVERHEAD;
+// LLM-based parsing and tailoring (replaces manual regex parsing)
+async function parseAndTailorWithLLM(resumeText, jd, userCredentials) {
+  console.log('🤖 Using LLM to parse and tailor resume...');
+  console.log('📋 User Credentials Received:');
+  console.log(`   Name: ${userCredentials.name}`);
+  console.log(`   Email: ${userCredentials.email}`);
+  console.log(`   Phone: ${userCredentials.phone}`);
+  console.log(`   Title: ${userCredentials.title}`);
   
-  // Allocate tokens: 30% for JD, 70% for resume (resume has more company details)
-  const jdTokens = Math.floor(AVAILABLE_TOKENS * 0.30);
-  const resumeTokens = Math.floor(AVAILABLE_TOKENS * 0.70);
-  
-  const truncatedJD = truncateToTokenLimit(jd, jdTokens);
-  const truncatedResume = truncateToTokenLimit(resumeText, resumeTokens);
-  
-  const finalPrompt = getCondensedPrompt(truncatedJD, truncatedResume);
-  const estimatedTotal = estimateTokens(finalPrompt);
-  
-  console.log(`📊 Token estimation: JD=${estimateTokens(truncatedJD)}, Resume=${estimateTokens(truncatedResume)}, Total=${estimatedTotal}/${MAX_TOKENS}`);
-  console.log(`🎯 Output capacity: ~${16000} tokens available for complete resume generation`);
-  
-  if (estimatedTotal > MAX_TOKENS) {
-    console.warn(`⚠️ Estimated tokens (${estimatedTotal}) exceeds limit (${MAX_TOKENS}). May still fail.`);
-  }
-  
-  return finalPrompt;
-}
-
-// Condensed prompt for token-limited providers (Sarvam AI: 7168 tokens)
-function getCondensedPrompt(jd, resumeText) {
-  return `Parse and tailor resume to JD. Return complete JSON structure.
-
-JD: ${jd}
-
-RESUME: ${resumeText}
-
-Output JSON with ALL companies (3-4 bullets each - will expand later), ALL skills. Use JD keywords.
-
-{
-"name":"Full Name",
-"title":"JD Title",
-"email":"email",
-"phone":"phone",
-"summary":["[Title] with X+ years in [domain], specializing in [JD tech]","5 more bullets"],
-"companies":[{"role":"Role","company":"Company","location":"Location","period":"Dates","bullets":["3-4 bullets with JD tech"],"technologies":"Tech1, Tech2"}],
-"skills":{"proven":{"Languages":"all from JD","Cloud":"all from JD","Databases":"all from JD","DevOps":"all from JD"}},
-"education":"Uni Degree Dates"
-}
-
-List EVERY company from resume. Close all braces. Output:`;
-}
-
-// Full detailed prompt for providers without token limits (Ollama)
-function getFullPrompt(jd, resumeText) {
-  return `You are an expert ATS resume writer creating a credible, interview-defensible resume tailored to a job description.
+  const prompt = `You are an expert ATS resume writer creating a credible, interview-defensible resume tailored to a job description.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CORE PRINCIPLE: HONEST KEYWORD OPTIMIZATION
+🚨 CRITICAL: USE THESE EXACT CREDENTIALS - DO NOT EXTRACT FROM RESUME 🚨
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-GOAL: Maximize ATS score + Interview defensibility
+**MANDATORY: Use these EXACT values in the JSON output. DO NOT change or extract from resume text:**
+
+CANDIDATE NAME (REQUIRED): ${userCredentials.name}
+CANDIDATE EMAIL (REQUIRED): ${userCredentials.email}
+CANDIDATE PHONE (REQUIRED): ${userCredentials.phone}
+CANDIDATE TITLE (REQUIRED - from JD): ${userCredentials.title || 'Extract job title from JD'}
+
+⚠️ VALIDATION RULES:
+1. The "name" field in your JSON output MUST exactly match: "${userCredentials.name}"
+2. The "email" field in your JSON output MUST exactly match: "${userCredentials.email}"
+3. The "phone" field in your JSON output MUST exactly match: "${userCredentials.phone}"
+4. The "title" field should be the job title from the JD (e.g., "Senior Software Engineer", "Backend Developer")
+5. DO NOT extract name, email, or phone from the resume text - use the values above
+6. If you use any other name, email, or phone, the resume will be REJECTED
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CORE PRINCIPLE: INTELLIGENT TECHNOLOGY TRANSFORMATION + ATS OPTIMIZATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CRITICAL MISSION: Transform the candidate's entire tech stack to match the JD while maintaining credibility.
+
+GOAL: 100% ATS keyword match + Interview defensibility
 - Include ALL JD keywords (Summary, Experience, Skills, Labs)
-- Transform entire resume to match JD stack where plausible
+- **TRANSFORM technologies throughout resume** to match JD stack (Java↔Python, AWS↔Azure, React↔Angular, etc.)
+- Replace similar technologies across ALL sections (Summary, Experience, Skills)
 - Use "safe placement" strategies for any remaining technologies
 - Maintain domain coherence and seniority-appropriate language
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TECHNOLOGY TRANSFORMATION MATRIX (Apply Throughout Resume)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**PROGRAMMING LANGUAGES:**
+- If JD has Python → Replace Java with Python, mention Django/Flask instead of Spring
+- If JD has Java → Replace Python with Java, mention Spring Boot instead of Django
+- If JD has Node.js → Emphasize JavaScript/TypeScript, Express.js
+- If JD has Go → Replace with Go, mention Gin/Echo frameworks
+- If JD has C# → Replace with C#, mention .NET Core/ASP.NET
+
+**FRONTEND FRAMEWORKS:**
+- If JD has React → Replace Angular with React, Redux, React Hooks
+- If JD has Angular → Replace React with Angular, RxJS, TypeScript
+- If JD has Vue.js → Replace with Vue.js, Vuex, Vue Router
+- Keep HTML5, CSS3, JavaScript, TypeScript (universal)
+
+**CLOUD PLATFORMS:**
+- If JD has AWS → Replace Azure/GCP with AWS services (EC2, S3, Lambda, RDS, ECS, CloudWatch)
+- If JD has Azure → Replace AWS/GCP with Azure services (VMs, Blob Storage, Functions, SQL Database, AKS, Monitor)
+- If JD has GCP → Replace AWS/Azure with GCP services (Compute Engine, Cloud Storage, Cloud Functions, Cloud SQL, GKE)
+
+**DATABASES:**
+- If JD has PostgreSQL → Emphasize PostgreSQL, de-emphasize MySQL
+- If JD has MongoDB → Emphasize MongoDB, NoSQL expertise
+- If JD has MySQL → Emphasize MySQL over PostgreSQL
+- If JD has DynamoDB → Replace with DynamoDB (AWS NoSQL)
+- If JD has Cassandra → Emphasize Cassandra for distributed databases
+- If JD has Redis → Always include Redis (universal caching)
+
+**CONTAINERIZATION & ORCHESTRATION:**
+- If JD has Docker → Always include Docker
+- If JD has Kubernetes → Emphasize Kubernetes, Helm, kubectl
+- If JD has OpenShift → Replace/add OpenShift
+- If JD has ECS/Fargate → Emphasize AWS container services
+
+**MESSAGE QUEUES:**
+- If JD has Kafka → Replace RabbitMQ with Kafka, emphasize event streaming
+- If JD has RabbitMQ → Replace Kafka with RabbitMQ, emphasize message queuing
+- If JD has AWS SQS/SNS → Emphasize AWS messaging services
+- If JD has Azure Service Bus → Emphasize Azure messaging
+
+**CI/CD TOOLS:**
+- If JD has Jenkins → Emphasize Jenkins pipelines
+- If JD has GitLab CI → Replace Jenkins with GitLab CI/CD
+- If JD has GitHub Actions → Emphasize GitHub Actions workflows
+- If JD has CircleCI → Replace with CircleCI
+- Always keep: Git, Maven/Gradle (universal)
+
+**APPLY TRANSFORMATIONS EVERYWHERE:**
+1. **Professional Summary:** Replace tech stack to match JD
+2. **Work Experience Bullets:** Transform technologies in each bullet
+3. **Technical Skills Section:** List JD technologies first and prominently
+4. **Technologies Used per Company:** Match JD tech stack
+
+**EXAMPLE TRANSFORMATION:**
+- Original: "Developed microservices using Java Spring Boot deployed on AWS ECS"
+- If JD wants Python + Azure: "Developed microservices using Python Django deployed on Azure AKS"
+- If JD wants Node.js + GCP: "Developed microservices using Node.js Express deployed on GCP Cloud Run"
 
 JOB DESCRIPTION:
 ${jd}
@@ -328,28 +344,68 @@ STRUCTURE REQUIREMENTS
    - Cross-domain contamination (IoT keywords in healthcare, finance keywords in education)
    - Scope inflation for seniority level
 
-3. TECHNICAL SKILLS (Organized in 2 sections)
+3. TECHNICAL SKILLS (Professional Format - Match Exact Category Structure)
    
-   Section A: PROVEN SKILLS (6-8 categories)
-   - Include ALL JD technologies
-   - Transform candidate's tech stack to match JD where plausible
-   - Categories: Languages, Cloud, Databases, Frameworks, DevOps, Messaging, etc.
+   **CRITICAL:** Use these EXACT category names and structure (ATS-optimized format):
    
-   Section B: FAMILIARITY / WORKING KNOWLEDGE (2-3 categories) - OPTIONAL
-   - List JD technologies NOT easily provable in work experience
-   - Group by category: "Container Orchestration (Learning): Kubernetes, Helm"
-   - Be honest: "Currently expanding knowledge through hands-on projects"
+   REQUIRED CATEGORIES (Include ALL that apply to JD):
    
-   Example:
-   PROVEN SKILLS:
-     - Languages: Go, Python, Java, JavaScript (from JD)
-     - Databases: PostgreSQL, MongoDB, Redis (from JD)
-     - DevOps: Jenkins, GitLab CI, Docker, Kubernetes (from JD)
+   1. **Programming Languages:** List ALL from JD first (Python, Java, JavaScript, Go, C#, TypeScript, etc.)
+   2. **Web Frameworks:** Match JD stack (Spring Boot, Django, Flask, FastAPI, Express.js, ASP.NET, etc.)
+   3. **Frontend Frameworks:** Match JD (React, Angular, Vue.js, Next.js, etc.) + HTML5, CSS3, JavaScript
+   4. **Databases:** ALL from JD (PostgreSQL, MongoDB, MySQL, Redis, DynamoDB, Cassandra, Oracle, etc.)
+   5. **Cloud Platforms:** Match JD cloud (AWS services OR Azure services OR GCP services - be specific)
+      - AWS: EC2, S3, Lambda, RDS, ECS, CloudWatch, IAM, VPC
+      - Azure: VMs, Blob Storage, Functions, SQL Database, AKS, Monitor
+      - GCP: Compute Engine, Cloud Storage, Cloud Functions, Cloud SQL, GKE
+   6. **Containerization:** Docker (if in JD), Kubernetes, Helm, OpenShift
+   7. **DevOps & CI/CD:** Jenkins, GitLab CI, GitHub Actions, Git, Maven, Gradle, Terraform, Ansible
+   8. **API & Web Services:** REST, GraphQL, SOAP, Swagger/OpenAPI, Postman
+   9. **Messaging & Streaming:** Kafka, RabbitMQ, AWS SQS/SNS, Azure Service Bus, Redis Pub/Sub
+   10. **Testing Frameworks:** Pytest, JUnit, Mockito, Jest, Karma, Selenium, Cucumber
    
-   WORKING KNOWLEDGE (optional):
-     - Service Mesh & Networking: Istio, OpenVPN (hands-on labs)
+   **FORMATTING RULES:**
+   - Use EXACT category names as shown above (e.g., "Programming Languages:" not "Languages:")
+   - List JD technologies FIRST in each category
+   - Be specific with cloud services (not just "AWS" but "AWS (EC2, S3, Lambda, RDS)")
+   - Include 8-10 categories total (comprehensive but not overwhelming)
+   - Each category: 3-8 technologies, comma-separated
+   
+   **TECHNOLOGY TRANSFORMATION (Apply to Skills Section):**
+   - If JD wants Python → List Python first, include Django/Flask
+   - If JD wants Java → List Java first, include Spring Boot/Spring MVC
+   - If JD wants AWS → List AWS services comprehensively
+   - If JD wants Azure → Replace AWS with equivalent Azure services
+   - If JD wants React → List React, Redux, React Hooks
+   - If JD wants Angular → List Angular, RxJS, TypeScript
+   
+   Example (AWS + Python + React):
+   
+   Programming Languages: Python, Java, JavaScript, TypeScript, SQL
+   Web Frameworks: Django, Flask, FastAPI, Spring Boot, Express.js
+   Frontend Frameworks: React, Redux, React Hooks, HTML5, CSS3, JavaScript
+   Databases: PostgreSQL, MongoDB, Redis, MySQL, DynamoDB
+   Cloud Platforms: AWS (EC2, S3, Lambda, RDS, ECS, CloudWatch, IAM, VPC)
+   Containerization: Docker, Kubernetes, Helm, ECS
+   DevOps & CI/CD: Jenkins, GitLab CI, GitHub Actions, Git, Maven, Terraform
+   API & Web Services: REST, GraphQL, Swagger UI, Postman
+   Messaging & Streaming: Kafka, RabbitMQ, AWS SQS, AWS SNS
+   Testing Frameworks: Pytest, JUnit, Mockito, Jest, Selenium
+   
+   Example (Azure + Java + Angular):
+   
+   Programming Languages: Java, JavaScript, TypeScript, Python, SQL
+   Web Frameworks: Spring Boot, Spring MVC, Hibernate, ASP.NET Core
+   Frontend Frameworks: Angular, RxJS, TypeScript, HTML5, CSS3
+   Databases: Azure SQL Database, PostgreSQL, MongoDB, Redis, MySQL
+   Cloud Platforms: Azure (VMs, Blob Storage, Functions, SQL Database, AKS, Monitor, IAM)
+   Containerization: Docker, Kubernetes, Helm, Azure AKS
+   DevOps & CI/CD: Azure DevOps, Jenkins, GitHub Actions, Git, Maven, Terraform
+   API & Web Services: REST, GraphQL, Swagger UI, Postman
+   Messaging & Streaming: Azure Service Bus, Kafka, RabbitMQ
+   Testing Frameworks: JUnit, Mockito, Jest, Jasmine, Selenium, Cucumber
 
-4. HANDS-ON LABS / PROJECTS (OPTIONAL - 4-6 bullets)
+4. HANDS-ON LABS / PROJECTS (OPTIONAL - Use only if needed for remaining keywords)
    
    Purpose: Capture remaining JD keywords ethically
    
@@ -403,29 +459,32 @@ VALIDATION CHECKLIST (Before returning resume)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Verify:
-1. ✅ ALL JD keywords appear at least once (Summary, Experience, Skills, or Labs)
-2. ✅ Production claims transformed to match JD stack where plausible
-3. ✅ Each company's bullets match their actual industry domain
-4. ✅ Remaining unproven JD tech in "Hands-on Labs" or "Working Knowledge" sections (if needed)
-5. ✅ Action verbs match candidate's seniority level
-6. ✅ No domain-contradicting claims (IoT at healthcare company unless adjacent)
-7. ✅ 8-10 bullets per company (proven + adapted + transferable)
-8. ✅ "Hands-on Labs" section present with 4-6 bullets (if needed for remaining keywords)
-9. ✅ Skills include ALL JD technologies
-10. ✅ All bullets are interview-defensible (candidate can explain)
+1. 🚨 CRITICAL: "name" = "${userCredentials.name}", "email" = "${userCredentials.email}", "phone" = "${userCredentials.phone}"
+2. ✅ ALL JD keywords appear at least once (Summary, Experience, Skills, or Labs)
+3. ✅ Production claims transformed to match JD stack where plausible
+4. ✅ Each company's bullets match their actual industry domain
+5. ✅ Remaining unproven JD tech in "Hands-on Labs" or "Working Knowledge" sections (if needed)
+6. ✅ Action verbs match candidate's seniority level
+7. ✅ No domain-contradicting claims (IoT at healthcare company unless adjacent)
+8. ✅ 8-10 bullets per company (proven + adapted + transferable)
+9. ✅ "Hands-on Labs" section present with 4-6 bullets (if needed for remaining keywords)
+10. ✅ Skills include ALL JD technologies
+11. ✅ All bullets are interview-defensible (candidate can explain)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT FORMAT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+🚨 CRITICAL: Use the EXACT credentials provided at the top of this prompt 🚨
+
 Return JSON:
 {
-  "name": "Candidate Name",
-  "title": "Job title from JD",
-  "email": "email@example.com",
-  "phone": "123-456-7890",
+  "name": "${userCredentials.name}",
+  "title": "[Extract EXACT job title from JD - e.g., Senior Software Engineer, Backend Developer, Full Stack Developer]",
+  "email": "${userCredentials.email}",
+  "phone": "${userCredentials.phone}",
   "summary": [
-    "FIRST: [Job Title] with [X]+ years of experience in [domain], specializing in [key tech stack]. Proven track record in [achievements] across [systems/domains]. (150-250 chars)",
+    "FIRST: [Job Title from JD] with [X]+ years of experience in [domain], specializing in [key tech stack]. Proven track record in [achievements] across [systems/domains]. (150-250 chars)",
     "Bullet 2: Proven skill with specific technologies and outcomes (150-250 chars)",
     "Bullet 3: Technical expertise with metrics or impact (150-250 chars)",
     "Bullet 4: JD keyword - adapted with context (150-250 chars)",
@@ -453,15 +512,16 @@ Return JSON:
     }
   ],
   "skills": {
-    "proven": {
-      "Languages": "ALL from JD",
-      "Cloud": "ALL from JD",
-      "Databases": "ALL from JD",
-      "DevOps": "ALL from JD"
-    },
-    "workingKnowledge": {
-      "Category": "Remaining JD tech (if any)"
-    }
+    "Programming Languages": "List ALL from JD (Python, Java, JavaScript, Go, TypeScript, etc.)",
+    "Web Frameworks": "Match JD stack (Spring Boot, Django, Flask, FastAPI, Express.js, etc.)",
+    "Frontend Frameworks": "Match JD (React, Angular, Vue.js, etc.) + HTML5, CSS3",
+    "Databases": "ALL from JD (PostgreSQL, MongoDB, MySQL, Redis, DynamoDB, etc.)",
+    "Cloud Platforms": "Match JD - AWS (EC2, S3, Lambda, RDS) OR Azure (VMs, Blob, AKS) OR GCP",
+    "Containerization": "Docker, Kubernetes, Helm (if in JD)",
+    "DevOps & CI/CD": "Jenkins, GitLab CI, GitHub Actions, Git, Maven, Gradle, Terraform",
+    "API & Web Services": "REST, GraphQL, SOAP, Swagger UI, Postman",
+    "Messaging & Streaming": "Kafka, RabbitMQ, AWS SQS, Azure Service Bus (match JD)",
+    "Testing Frameworks": "Pytest, JUnit, Mockito, Jest, Selenium (match JD language)"
   },
   "handsOnLabs": [
     "Built gRPC microservices POC (if needed for remaining JD tech)",
@@ -471,37 +531,52 @@ Return JSON:
   "education": "University    Degree    Dates (PLAIN TEXT STRING)"
 }
 
+**CRITICAL INSTRUCTIONS FOR SKILLS SECTION:**
+- Use EXACT category names as shown: "Programming Languages:", "Web Frameworks:", etc.
+- Transform technologies to match JD throughout (Java→Python if JD wants Python)
+- List JD technologies FIRST in each category
+- Include 8-10 categories that apply to the JD
+- Be specific with cloud services: "AWS (EC2, S3, Lambda, RDS, ECS, CloudWatch)" not just "AWS"
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FINAL REMINDERS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🚨 CRITICAL VALIDATION - DOUBLE CHECK BEFORE RETURNING:
+1. ✅ "name" field = "${userCredentials.name}" (EXACT MATCH REQUIRED)
+2. ✅ "email" field = "${userCredentials.email}" (EXACT MATCH REQUIRED)
+3. ✅ "phone" field = "${userCredentials.phone}" (EXACT MATCH REQUIRED)
+4. ✅ "title" field = Job title from JD (e.g., "Senior Software Engineer", "Backend Developer")
 
 ✅ GOAL: 100% JD keyword coverage + interview defensibility
 ✅ STRATEGY: Transform entire resume to JD stack + safe placement for remaining tech
 ✅ OUTCOME: Pass ATS + Pass recruiter + Pass hiring manager + Pass interview
 
-⚠️ MAINTAIN: Domain coherence, seniority-appropriate verbs
-⚠️ AVOID: Cross-domain claims that don't make sense
+⚠️ MAINTAIN: Domain coherence, seniority-appropriate verbs, EXACT user credentials
+⚠️ AVOID: Cross-domain claims, wrong name/email/phone
+
+🚨 IF YOU USE ANY OTHER NAME, EMAIL, OR PHONE - THE RESUME WILL BE REJECTED 🚨
 
 Now generate the resume. Return ONLY valid JSON, no explanations:`;
-}
-
-// LLM-based parsing and tailoring (replaces manual regex parsing)
-async function parseAndTailorWithLLM(resumeText, jd, userCredentials) {
-  console.log('🤖 Using LLM to parse and tailor resume...');
-  
-  // Get appropriate prompt based on provider capabilities
-  const provider = getLLMConfig().provider;
-  const prompt = getPromptForProvider(provider, jd, resumeText);
 
   try {
-    console.log(`🤖 LLM Provider: ${getLLMConfig().provider.toUpperCase()} (${getLLMConfig().model})`);
-    
-    const data = await generateLLM({
-      prompt: prompt,
-      temperature: 0.8,  // Slightly higher for more detailed/creative bullets
-      num_predict: 20000,  // Increased for 8-10 detailed bullets per company (150-200 chars each)
-      num_ctx: 20480  // Larger context window for comprehensive output
+    const response = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama3:latest',
+        prompt: prompt,
+        stream: false,
+        options: {
+          temperature: 0.8,  // Slightly higher for more detailed/creative bullets
+          num_predict: 20000,  // Increased for 8-10 detailed bullets per company (150-200 chars each)
+          num_ctx: 20480,  // Larger context window for comprehensive output
+          stop: []  // Don't stop early
+        }
+      })
     });
+
+    const data = await response.json();
     let parsedData;
     let cleanResponse = '';  // Declare outside try block for error logging
     
@@ -629,12 +704,22 @@ TASK: Generate ${needed} MORE bullets (150-200 chars each) that:
 Return ONLY the new bullet points, one per line, without numbers or bullet symbols.`;
 
           try {
-            const expansionData = await generateLLM({
-              prompt: expansionPrompt,
-              temperature: 0.8,  // Slightly higher for creativity
-              num_predict: 2000,
-              num_ctx: 8192
+            const expansionResponse = await fetch('http://localhost:11434/api/generate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: 'llama3:latest',
+                prompt: expansionPrompt,
+                stream: false,
+                options: {
+                  temperature: 0.8,  // Slightly higher for creativity
+                  num_predict: 2000,
+                  num_ctx: 8192
+                }
+              })
             });
+            
+            const expansionData = await expansionResponse.json();
             const newBullets = expansionData.response.trim().split('\n')
               .filter(line => line.trim().length > 50)  // Filter out short/empty lines
               .map(line => line.trim().replace(/^[-•*]\s*/, ''))  // Remove bullet symbols
@@ -666,16 +751,42 @@ Return ONLY the new bullet points, one per line, without numbers or bullet symbo
       throw new Error(`LLM returned invalid JSON: ${parseError.message}. The model may be truncating output. Try with a shorter JD or resume.`);
     }
 
-    // Merge with user credentials (use LLM data as base, override with user input if provided)
+    // Merge with user credentials - ALWAYS use provided credentials, never LLM-extracted ones
+    console.log('\n🔍 Validating LLM output credentials...');
+    
+    // Validate that LLM used correct credentials
+    if (parsedData.name !== userCredentials.name) {
+      console.warn(`⚠️  LLM returned wrong name: "${parsedData.name}" (expected: "${userCredentials.name}")`);
+      console.warn(`   → OVERRIDING with correct name: "${userCredentials.name}"`);
+    } else {
+      console.log(`✅ Name matches: "${userCredentials.name}"`);
+    }
+    
+    if (parsedData.email !== userCredentials.email) {
+      console.warn(`⚠️  LLM returned wrong email: "${parsedData.email}" (expected: "${userCredentials.email}")`);
+      console.warn(`   → OVERRIDING with correct email: "${userCredentials.email}"`);
+    } else {
+      console.log(`✅ Email matches: "${userCredentials.email}"`);
+    }
+    
+    if (parsedData.phone !== userCredentials.phone) {
+      console.warn(`⚠️  LLM returned wrong phone: "${parsedData.phone}" (expected: "${userCredentials.phone}")`);
+      console.warn(`   → OVERRIDING with correct phone: "${userCredentials.phone}"`);
+    } else {
+      console.log(`✅ Phone matches: "${userCredentials.phone}"`);
+    }
+    
+    // ALWAYS use userCredentials - never trust LLM for contact info
     return {
-      name: userCredentials.name || parsedData.name,
-      title: userCredentials.title || parsedData.title,
-      email: userCredentials.email || parsedData.email,
-      phone: userCredentials.phone || parsedData.phone,
+      name: userCredentials.name,  // ALWAYS use provided name
+      title: parsedData.title || userCredentials.title,  // Use LLM title (from JD), fallback to provided
+      email: userCredentials.email,  // ALWAYS use provided email
+      phone: userCredentials.phone,  // ALWAYS use provided phone
       summary: parsedData.summary || [],
       companies: parsedData.companies || [],
       skills: parsedData.skills || {},
-      education: parsedData.education || ''
+      education: parsedData.education || '',
+      handsOnLabs: parsedData.handsOnLabs || []
     };
     
   } catch (error) {
@@ -879,10 +990,17 @@ Generate a PROFESSIONAL SUMMARY with 6-8 bullet points that:
 
 Return ONLY the bullet points, one per line, without bullet symbols.`;
 
-  const summaryData = await generateLLM({
-    prompt: summaryPrompt,
-    temperature: 0.8
+  const summaryResponse = await fetch('http://localhost:11434/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'llama3:latest',
+      prompt: summaryPrompt,
+      stream: false
+    })
   });
+  
+  const summaryData = await summaryResponse.json();
   const summaryPoints = summaryData.response.trim().split('\n').filter(l => l.trim().length > 0);
   console.log(`   ✅ Generated ${summaryPoints.length} summary points`);
   
@@ -909,10 +1027,17 @@ Generate 5-6 achievement bullet points that:
 
 Return ONLY the bullet points, one per line, without bullet symbols.`;
 
-    const bulletData = await generateLLM({
-      prompt: bulletPrompt,
-      temperature: 0.8
+    const bulletResponse = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama3:latest',
+        prompt: bulletPrompt,
+        stream: false
+      })
     });
+    
+    const bulletData = await bulletResponse.json();
     const bulletPoints = bulletData.response.trim().split('\n').filter(l => l.trim().length > 0);
     
     tailoredCompanies.push({
@@ -944,10 +1069,17 @@ Category Name: skill1, skill2, skill3
 
 Do NOT include explanations, just the category:skills format.`;
 
-  const skillsData = await generateLLM({
-    prompt: skillsPrompt,
-    temperature: 0.8
+  const skillsResponse = await fetch('http://localhost:11434/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'llama3:latest',
+      prompt: skillsPrompt,
+      stream: false
+    })
   });
+  
+  const skillsData = await skillsResponse.json();
   const skillsText = skillsData.response.trim();
   
   // Parse AI-generated skills into object
