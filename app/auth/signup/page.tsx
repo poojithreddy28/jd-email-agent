@@ -82,7 +82,7 @@ export default function SignUp() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-6 sm:p-8 shadow-2xl"
+          className="bg-white/95 dark:bg-gray-800/95 sm:backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-6 sm:p-8 shadow-2xl"
         >
           {/* Header */}
           <div className="text-center mb-8">

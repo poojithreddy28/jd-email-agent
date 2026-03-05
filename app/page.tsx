@@ -160,9 +160,8 @@ export default function EmailGenerator() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.1 }}
-          whileHover={{ scale: 1.002 }}
-          className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6 mb-4 sm:mb-6 shadow-2xl hover:shadow-3xl transition-shadow"
+          transition={{ duration: 0.35, ease: 'easeOut', delay: 0.1 }}
+          className="bg-white/95 dark:bg-gray-800/95 sm:backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6 mb-4 sm:mb-6 shadow-2xl"
         >
           {/* Mode Toggle */}
           <div className="mb-6">
@@ -387,13 +386,11 @@ export default function EmailGenerator() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ 
-                    type: 'spring', 
-                    stiffness: 400, 
-                    damping: 25,
-                    delay: index * 0.1 
+                    duration: 0.3, 
+                    ease: 'easeOut',
+                    delay: index * 0.08 
                   }}
-                  whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                  className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6 shadow-xl hover:shadow-2xl transition-shadow"
+                  className="bg-white/95 dark:bg-gray-800/95 sm:backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6 shadow-xl"
                 >
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-base font-semibold text-gray-900 dark:text-white">

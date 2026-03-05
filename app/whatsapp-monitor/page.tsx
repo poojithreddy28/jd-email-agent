@@ -340,7 +340,7 @@ export default function WhatsAppMonitor() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5 mb-4 sm:mb-5 shadow-2xl"
+          className="bg-white/95 dark:bg-gray-800/95 sm:backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5 mb-4 sm:mb-5 shadow-2xl"
         >
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
             <div className="flex items-center gap-4">
@@ -550,7 +550,7 @@ export default function WhatsAppMonitor() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 p-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 shadow-xl gap-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 p-4 bg-white/95 dark:bg-gray-800/95 sm:backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 shadow-xl gap-3">
               <div>
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white">
                   Found Job Requirements
@@ -593,7 +593,7 @@ export default function WhatsAppMonitor() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5 shadow-xl"
+                className="bg-white/95 dark:bg-gray-800/95 sm:backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5 shadow-xl"
               >
                 {/* Header */}
                 <div className="flex items-start justify-between mb-4">
