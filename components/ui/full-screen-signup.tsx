@@ -141,7 +141,7 @@ export const FullScreenSignup = () => {
         <GradientBackground />
       </div>
       
-      <div className="w-full relative max-w-5xl overflow-hidden flex flex-col md:flex-row shadow-2xl rounded-3xl z-10 backdrop-blur-sm">
+      <div className="w-full relative max-w-5xl overflow-hidden flex flex-col md:flex-row shadow-2xl rounded-2xl sm:rounded-3xl z-10 backdrop-blur-sm mx-2 sm:mx-0">
         <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white p-8 md:p-12 md:w-1/2 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-gray-600/10 via-transparent to-gray-500/10"></div>
           <h1 className="text-2xl md:text-3xl font-medium leading-tight z-10 tracking-tight relative">

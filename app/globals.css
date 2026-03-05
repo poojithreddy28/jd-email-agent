@@ -74,3 +74,33 @@ html {
 .dark ::-webkit-scrollbar-thumb:hover {
   background: #64748b;
 }
+
+/* Mobile responsive utilities */
+@media (max-width: 640px) {
+  /* Prevent horizontal overflow */
+  html, body {
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Better touch targets */
+  button, a, input, select, textarea {
+    min-height: 44px;
+  }
+
+  /* Fix input zoom on iOS */
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="password"],
+  input[type="url"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  /* Smoother scrolling on iOS */
+  .overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}

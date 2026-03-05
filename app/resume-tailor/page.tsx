@@ -274,20 +274,20 @@ export default function ResumeTailor() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 relative overflow-hidden pt-20 transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 relative overflow-hidden pt-16 sm:pt-20 transition-colors duration-300">
       {/* Animated gradient background */}
       <div className="absolute inset-0 z-0">
         <GradientBackground />
       </div>
       
-      <div className="max-w-5xl mx-auto px-6 py-12 relative z-10">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-12 relative z-10">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-12"
         >
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Resume Tailor</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2">Resume Tailor</h1>
           <p className="text-base text-gray-600 dark:text-gray-400">Customize your resume for specific job descriptions</p>
         </motion.div>
 
@@ -297,7 +297,7 @@ export default function ResumeTailor() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.1 }}
           whileHover={{ scale: 1.002 }}
-          className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-gray-700 p-6 mb-6 shadow-2xl hover:shadow-3xl transition-shadow"
+          className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6 mb-4 sm:mb-6 shadow-2xl hover:shadow-3xl transition-shadow"
         >
           {/* Mode Toggle */}
           <div className="mb-6">
@@ -494,9 +494,9 @@ export default function ResumeTailor() {
               className="space-y-4"
             >
               {/* Generation Time and Download Header */}
-              <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-3 flex items-center justify-between">
+              <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-green-100 dark:bg-green-800 rounded-full flex items-center justify-center">
+                  <div className="w-8 h-8 bg-green-100 dark:bg-green-800 rounded-full flex items-center justify-center flex-shrink-0">
                     <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
                   </div>
                   <div>
@@ -512,13 +512,13 @@ export default function ResumeTailor() {
                     </p>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full sm:w-auto">
                   {!isEditMode && (
                     <motion.button
                       onClick={handleEditMode}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="px-4 py-2 bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-800 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                      className="flex-1 sm:flex-none px-4 py-2 bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-800 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
                     >
                       <Edit3 className="w-3 h-3" />
                       Edit Content
@@ -528,7 +528,7 @@ export default function ResumeTailor() {
                     onClick={handleDownload}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="px-4 py-2 bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-gray-900 text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                    className="flex-1 sm:flex-none px-4 py-2 bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-gray-900 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     <Download className="w-3 h-3" />
                     Download {downloadFormat.toUpperCase()}
@@ -538,7 +538,7 @@ export default function ResumeTailor() {
 
               {/* Format Selector */}
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">Download Format</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Choose your preferred file format</p>
@@ -579,7 +579,7 @@ export default function ResumeTailor() {
 
               {/* Preview or Edit Mode */}
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="bg-gray-100 dark:bg-gray-700 px-4 py-2.5 border-b border-gray-200 dark:border-gray-600 flex items-center justify-between">
+                <div className="bg-gray-100 dark:bg-gray-700 px-3 sm:px-4 py-2.5 border-b border-gray-200 dark:border-gray-600 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                   <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
                     {isEditMode ? '✏️ Edit Mode - Fix typos, spacing, or content' : `📄 Preview - Poojith_Reddy_${roleName}.${downloadFormat}`}
                   </p>
@@ -600,7 +600,7 @@ export default function ResumeTailor() {
                     </div>
                   )}
                 </div>
-                <div className="p-6 max-h-[600px] overflow-y-auto">
+                <div className="p-3 sm:p-6 max-h-[600px] overflow-y-auto">
                   {isEditMode ? (
                     <div className="space-y-3">
                       <div className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4 mb-4">
@@ -629,7 +629,7 @@ export default function ResumeTailor() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-3 justify-center">
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <button
                   onClick={handleDownload}
                   className="px-5 py-2 bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-gray-900 text-sm font-medium rounded-lg transition-colors flex items-center gap-2"

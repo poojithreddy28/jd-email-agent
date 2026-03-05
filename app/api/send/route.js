@@ -14,6 +14,7 @@ export async function POST(req) {
   const fromEmail = formData.get('fromEmail');
   const resumeFile = formData.get('resume');
   const useDefaultResume = formData.get('useDefaultResume');
+  const account = formData.get('account') || 'se'; // 'se' or 'dev'
 
   let tempPath;
   let filename;
@@ -67,14 +68,19 @@ For detailed experience and projects, please contact directly.
     return Response.json({ error: "Resume is required" }, { status: 400 });
   }
 
-  // Gmail SMTP (free): use App Password
+  // Gmail SMTP (free): use App Password - switch based on account selection
+  const gmailUser = account === 'dev' ? process.env.GMAIL_USER_DEV : process.env.GMAIL_USER;
+  const gmailPass = account === 'dev' ? process.env.GMAIL_APP_PASSWORD_DEV : process.env.GMAIL_APP_PASSWORD;
+  
+  console.log(`📧 Using email account: ${gmailUser} (${account})`);
+  
   const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
     port: 587,
     secure: false,
     auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD,
+      user: gmailUser,
+      pass: gmailPass,
     },
     tls: {
       rejectUnauthorized: false
@@ -113,7 +119,7 @@ For detailed experience and projects, please contact directly.
 </html>`;
 
   await transporter.sendMail({
-    from: `${fromName} <${process.env.GMAIL_USER}>`,
+    from: `${fromName} <${gmailUser}>`,
     to,
     subject,
     text: body,  // Plain text fallback

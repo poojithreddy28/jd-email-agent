@@ -6,7 +6,7 @@ import path from 'path';
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { message, recruiterEmail } = body;
+    const { message, recruiterEmail, account = 'se' } = body;
 
     if (!message) {
       return NextResponse.json(
@@ -58,11 +58,17 @@ export async function POST(request) {
     // Send the email
     console.log(`📤 Sending email to: ${recruiterEmail}`);
     
+    // Switch email credentials based on account selection
+    const emailUser = account === 'dev' ? process.env.GMAIL_USER_DEV : process.env.GMAIL_USER;
+    const emailPass = account === 'dev' ? process.env.GMAIL_APP_PASSWORD_DEV : process.env.GMAIL_APP_PASSWORD;
+    
+    console.log(`📧 Using email account: ${emailUser} (${account})`);
+    
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD,
+        user: emailUser,
+        pass: emailPass,
       },
     });
 
@@ -78,7 +84,7 @@ export async function POST(request) {
     }
 
     await transporter.sendMail({
-      from: `${process.env.DEFAULT_NAME || 'Poojith Reddy A'} <${process.env.EMAIL_USER}>`,
+      from: `${process.env.DEFAULT_NAME || 'Poojith Reddy A'} <${emailUser}>`,
       to: recruiterEmail,
       subject: emailData.subject,
       text: emailData.body,

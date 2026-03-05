@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, Send, Check, Power, Clock, Search, Upload, X, Copy, Mail } from 'lucide-react';
+import { MessageSquare, Send, Check, Power, Clock, Search, Upload, X, Copy, Mail, RefreshCw } from 'lucide-react';
 import { GradientBackground } from '@/components/GradientBackground';
 
 interface JobMessage {
@@ -45,6 +45,17 @@ export default function WhatsAppMonitor() {
     phone: '+1 (312) 536-9779',
     resume: null
   });
+  const [activeAccount, setActiveAccount] = useState<'se' | 'dev'>('se');
+
+  const EMAIL_ACCOUNTS = {
+    se: { email: 'poojithreddy.se@gmail.com', label: 'SE Mail' },
+    dev: { email: 'poojithreddy.dev@gmail.com', label: 'Dev Mail' },
+  };
+
+  const switchAccount = (account: 'se' | 'dev') => {
+    setActiveAccount(account);
+    setEmailForm(prev => ({ ...prev, email: EMAIL_ACCOUNTS[account].email }));
+  };
 
   // Check connection status on mount
   useEffect(() => {
@@ -252,6 +263,7 @@ export default function WhatsAppMonitor() {
       formData.append('body', message.generatedEmail.body);
       formData.append('fromName', emailForm.name);
       formData.append('fromEmail', emailForm.email);
+      formData.append('account', activeAccount);
       if (emailForm.resume) {
         formData.append('resume', emailForm.resume);
       } else {
@@ -299,13 +311,13 @@ export default function WhatsAppMonitor() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 relative overflow-hidden pt-20 transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 relative overflow-hidden pt-16 sm:pt-20 transition-colors duration-300">
       {/* Animated gradient background */}
       <div className="absolute inset-0 z-0">
         <GradientBackground />
       </div>
       
-      <div className="max-w-6xl mx-auto px-6 py-8 relative z-10">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-8 relative z-10">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -328,9 +340,9 @@ export default function WhatsAppMonitor() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-gray-700 p-5 mb-5 shadow-2xl"
+          className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5 mb-4 sm:mb-5 shadow-2xl"
         >
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
             <div className="flex items-center gap-4">
               <div className={`w-3 h-3 rounded-full ${
                 isConnected ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
@@ -381,6 +393,38 @@ export default function WhatsAppMonitor() {
               animate={{ opacity: 1, height: 'auto' }}
               className="space-y-4 mt-5 pt-5 border-t border-gray-200 dark:border-gray-700"
             >
+              {/* Email Account Switcher */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <RefreshCw className="w-3 h-3 inline mr-1" />
+                  Send From Account
+                </label>
+                <div className="flex flex-col sm:inline-flex sm:flex-row bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1 sm:gap-0">
+                  <button
+                    onClick={() => switchAccount('se')}
+                    className={`px-3 py-2 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
+                      activeAccount === 'se'
+                        ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Mail className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate">poojithreddy.se@gmail.com</span>
+                  </button>
+                  <button
+                    onClick={() => switchAccount('dev')}
+                    className={`px-3 py-2 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
+                      activeAccount === 'dev'
+                        ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Mail className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate">poojithreddy.dev@gmail.com</span>
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Contact/Group Name
@@ -414,7 +458,7 @@ export default function WhatsAppMonitor() {
                     <button
                       key={option.value}
                       onClick={() => setTimeRange(option.value as 5 | 15 | 30 | 60 | 120 | 360)}
-                      className={`flex-1 min-w-[90px] px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                      className={`flex-1 min-w-[70px] sm:min-w-[90px] px-2 sm:px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
                         timeRange === option.value
                           ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
@@ -506,7 +550,7 @@ export default function WhatsAppMonitor() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
-            <div className="flex items-center justify-between mb-4 p-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-gray-700 shadow-xl">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 p-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 shadow-xl gap-3">
               <div>
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white">
                   Found Job Requirements
@@ -549,7 +593,7 @@ export default function WhatsAppMonitor() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-gray-700 p-5 shadow-xl"
+                className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5 shadow-xl"
               >
                 {/* Header */}
                 <div className="flex items-start justify-between mb-4">

@@ -78,15 +78,15 @@ export default function SignUp() {
         <GradientBackground />
       </div>
       
-      <div className="max-w-md w-full mx-auto px-6 py-12 relative z-10">
+      <div className="max-w-md w-full mx-auto px-4 sm:px-6 py-6 sm:py-12 relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-gray-700 p-8 shadow-2xl"
+          className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-6 sm:p-8 shadow-2xl"
         >
           {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Create Account</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2">Create Account</h1>
             <p className="text-base text-gray-600 dark:text-gray-400">Get started with your free account</p>
           </div>
 

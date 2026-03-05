@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Mail, Send, Copy, Check, Plus, X } from 'lucide-react';
+import { FileText, Mail, Send, Copy, Check, Plus, X, RefreshCw } from 'lucide-react';
 import { GradientBackground } from '@/components/GradientBackground';
 
 interface EmailData {
@@ -24,6 +24,17 @@ export default function EmailGenerator() {
   const [sending, setSending] = useState(false);
   const [emailsSent, setEmailsSent] = useState<boolean[]>([]);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [activeAccount, setActiveAccount] = useState<'se' | 'dev'>('se');
+
+  const EMAIL_ACCOUNTS = {
+    se: { email: 'poojithreddy.se@gmail.com', label: 'SE Mail' },
+    dev: { email: 'poojithreddy.dev@gmail.com', label: 'Dev Mail' },
+  };
+
+  const switchAccount = (account: 'se' | 'dev') => {
+    setActiveAccount(account);
+    setEmail(EMAIL_ACCOUNTS[account].email);
+  };
 
   const addJDField = () => setMultipleJDs([...multipleJDs, '']);
   const removeJDField = (index: number) => setMultipleJDs(multipleJDs.filter((_, i) => i !== index));
@@ -90,6 +101,7 @@ export default function EmailGenerator() {
       formData.append('body', emailData.body);
       formData.append('fromName', name);
       formData.append('fromEmail', email);
+      formData.append('account', activeAccount);
       if (resume) {
         formData.append('resume', resume);
       } else {
@@ -127,20 +139,20 @@ export default function EmailGenerator() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 relative overflow-hidden pt-20 transition-colors duration-300">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 relative overflow-hidden pt-16 sm:pt-20 transition-colors duration-300">
       {/* Animated gradient background */}
       <div className="absolute inset-0 z-0">
         <GradientBackground />
       </div>
       
-      <div className="max-w-4xl mx-auto px-6 py-12 relative z-10">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-12 relative z-10">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-12"
         >
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Email Generator</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2">Email Generator</h1>
           <p className="text-base text-gray-600 dark:text-gray-400">Generate personalized emails for job applications</p>
         </motion.div>
 
@@ -150,7 +162,7 @@ export default function EmailGenerator() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.1 }}
           whileHover={{ scale: 1.002 }}
-          className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-gray-700 p-6 mb-6 shadow-2xl hover:shadow-3xl transition-shadow"
+          className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6 mb-4 sm:mb-6 shadow-2xl hover:shadow-3xl transition-shadow"
         >
           {/* Mode Toggle */}
           <div className="mb-6">
@@ -175,6 +187,38 @@ export default function EmailGenerator() {
                 }`}
               >
                 Multiple Jobs
+              </button>
+            </div>
+          </div>
+
+          {/* Email Account Switcher */}
+          <div className="mb-6">
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <RefreshCw className="w-3 h-3 inline mr-1" />
+              Send From Account
+            </label>
+            <div className="flex flex-col sm:inline-flex sm:flex-row bg-gray-100 dark:bg-gray-700 rounded-lg p-1 gap-1 sm:gap-0">
+              <button
+                onClick={() => switchAccount('se')}
+                className={`px-3 sm:px-4 py-2 rounded-md text-xs font-medium transition-all flex items-center gap-2 ${
+                  activeAccount === 'se'
+                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                <Mail className="w-3 h-3 flex-shrink-0" />
+                <span className="truncate">poojithreddy.se@gmail.com</span>
+              </button>
+              <button
+                onClick={() => switchAccount('dev')}
+                className={`px-3 sm:px-4 py-2 rounded-md text-xs font-medium transition-all flex items-center gap-2 ${
+                  activeAccount === 'dev'
+                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                <Mail className="w-3 h-3 flex-shrink-0" />
+                <span className="truncate">poojithreddy.dev@gmail.com</span>
               </button>
             </div>
           </div>
@@ -349,7 +393,7 @@ export default function EmailGenerator() {
                     delay: index * 0.1 
                   }}
                   whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                  className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-3xl border border-gray-200 dark:border-gray-700 p-6 shadow-xl hover:shadow-2xl transition-shadow"
+                  className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6 shadow-xl hover:shadow-2xl transition-shadow"
                 >
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-base font-semibold text-gray-900 dark:text-white">
@@ -404,7 +448,7 @@ export default function EmailGenerator() {
                     </div>
                   </div>
 
-                  <div className="flex gap-3">
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <motion.button
                       onClick={() => sendEmail(email, index)}
                       disabled={sending || !email.recipientEmail?.trim() || emailsSent[index]}
