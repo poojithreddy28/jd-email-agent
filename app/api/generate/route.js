@@ -92,23 +92,36 @@ CRITICAL JSON FORMATTING RULES:
 `;
 
   try {
-    const r = await fetch("http://localhost:11434/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    // Use Anthropic Claude API
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
       body: JSON.stringify({
-        model: "llama3:latest",
-        prompt,
-        stream: false,
+        model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        temperature: 0.7,
+        messages: [{ role: 'user', content: prompt }],
       }),
     });
 
     if (!r.ok) {
-      throw new Error(`Ollama server error: ${r.status} ${r.statusText}`);
+      const errText = await r.text();
+      throw new Error(`Claude API error: ${r.status} - ${errText}`);
     }
 
-    const data = await r.json();
+    const claudeData = await r.json();
+    const data = {
+      response: claudeData.content
+        .filter(b => b.type === 'text')
+        .map(b => b.text)
+        .join('')
+    };
 
-  // Ollama returns { response: "..." }
+  // Claude response extracted into data.response
   // response should be JSON; parse safely:
   let parsed;
   
@@ -215,7 +228,7 @@ CRITICAL JSON FORMATTING RULES:
   } catch (error) {
     console.error('Error in email generation:', error);
     
-    // Return a fallback response when Ollama is not available
+    // Return a fallback response when Claude API is not available
     return Response.json({
       subject: `Job Application - ${company || 'Position of Interest'}`,
       body: `Dear Hiring Manager,\n\nI am writing to express my strong interest in the position described in your job posting. As a Java Full Stack Developer with extensive experience in backend and frontend technologies, I am confident that my skills align well with your requirements.\n\nI would welcome the opportunity to discuss how my expertise can contribute to your team's success. Please find my resume attached for your review.\n\nI look forward to hearing from you.${signature}`,

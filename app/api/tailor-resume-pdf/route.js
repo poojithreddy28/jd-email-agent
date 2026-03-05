@@ -4,6 +4,41 @@ import fs from 'fs';
 import path from 'path';
 import mammoth from 'mammoth';
 
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
+
+/**
+ * Call Anthropic Claude Messages API and return { response: text }
+ */
+async function callClaude(prompt, max_tokens = 4096, temperature = 0.7) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: ANTHROPIC_MODEL,
+      max_tokens,
+      temperature,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Anthropic API error: ${res.status} - ${errText}`);
+  }
+
+  const data = await res.json();
+  const text = data.content
+    .filter(b => b.type === 'text')
+    .map(b => b.text)
+    .join('');
+  return { response: text };
+}
+
 const TEMP_DIR = path.join(process.cwd(), 'temp');
 
 // Ensure temp directory exists
@@ -560,23 +595,7 @@ FINAL REMINDERS
 Now generate the resume. Return ONLY valid JSON, no explanations:`;
 
   try {
-    const response = await fetch('http://localhost:11434/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'llama3:latest',
-        prompt: prompt,
-        stream: false,
-        options: {
-          temperature: 0.8,  // Slightly higher for more detailed/creative bullets
-          num_predict: 20000,  // Increased for 8-10 detailed bullets per company (150-200 chars each)
-          num_ctx: 20480,  // Larger context window for comprehensive output
-          stop: []  // Don't stop early
-        }
-      })
-    });
-
-    const data = await response.json();
+    const data = await callClaude(prompt, 8192, 0.7);
     let parsedData;
     let cleanResponse = '';  // Declare outside try block for error logging
     
@@ -704,22 +723,7 @@ TASK: Generate ${needed} MORE bullets (150-200 chars each) that:
 Return ONLY the new bullet points, one per line, without numbers or bullet symbols.`;
 
           try {
-            const expansionResponse = await fetch('http://localhost:11434/api/generate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                model: 'llama3:latest',
-                prompt: expansionPrompt,
-                stream: false,
-                options: {
-                  temperature: 0.8,  // Slightly higher for creativity
-                  num_predict: 2000,
-                  num_ctx: 8192
-                }
-              })
-            });
-            
-            const expansionData = await expansionResponse.json();
+            const expansionData = await callClaude(expansionPrompt, 2048, 0.7);
             const newBullets = expansionData.response.trim().split('\n')
               .filter(line => line.trim().length > 50)  // Filter out short/empty lines
               .map(line => line.trim().replace(/^[-•*]\s*/, ''))  // Remove bullet symbols
@@ -990,17 +994,7 @@ Generate a PROFESSIONAL SUMMARY with 6-8 bullet points that:
 
 Return ONLY the bullet points, one per line, without bullet symbols.`;
 
-  const summaryResponse = await fetch('http://localhost:11434/api/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'llama3:latest',
-      prompt: summaryPrompt,
-      stream: false
-    })
-  });
-  
-  const summaryData = await summaryResponse.json();
+  const summaryData = await callClaude(summaryPrompt, 2048, 0.7);
   const summaryPoints = summaryData.response.trim().split('\n').filter(l => l.trim().length > 0);
   console.log(`   ✅ Generated ${summaryPoints.length} summary points`);
   
@@ -1027,17 +1021,7 @@ Generate 5-6 achievement bullet points that:
 
 Return ONLY the bullet points, one per line, without bullet symbols.`;
 
-    const bulletResponse = await fetch('http://localhost:11434/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'llama3:latest',
-        prompt: bulletPrompt,
-        stream: false
-      })
-    });
-    
-    const bulletData = await bulletResponse.json();
+    const bulletData = await callClaude(bulletPrompt, 2048, 0.7);
     const bulletPoints = bulletData.response.trim().split('\n').filter(l => l.trim().length > 0);
     
     tailoredCompanies.push({
@@ -1069,17 +1053,7 @@ Category Name: skill1, skill2, skill3
 
 Do NOT include explanations, just the category:skills format.`;
 
-  const skillsResponse = await fetch('http://localhost:11434/api/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'llama3:latest',
-      prompt: skillsPrompt,
-      stream: false
-    })
-  });
-  
-  const skillsData = await skillsResponse.json();
+  const skillsData = await callClaude(skillsPrompt, 2048, 0.7);
   const skillsText = skillsData.response.trim();
   
   // Parse AI-generated skills into object

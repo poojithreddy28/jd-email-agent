@@ -16,7 +16,7 @@
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "docx": "^9.5.3",
+    "docx": "^9.6.0",
     "formidable": "^3.5.4",
     "framer-motion": "^12.33.0",
     "html-docx-js-typescript": "^0.1.5",

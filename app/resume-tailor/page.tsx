@@ -1,653 +1,514 @@
 'use client';
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Upload, Check, Briefcase, UserCircle, Edit3, Download } from 'lucide-react';
-import { GradientBackground } from '@/components/GradientBackground';
+import {
+  Sparkles, Download, RotateCcw, CheckCircle2, Clock,
+  Pencil, Eye, EyeOff,
+} from 'lucide-react';
 
-interface ResumeOutput {
-  summary: string | string[];
-  experience: Array<{
-    company: string;
-    products?: string;
-    bullets: string[];
-  }>;
+// ─── Types ─────────────────────────────────────────────────────────────────────
+interface Seg { t: string; b: boolean; rewritten?: boolean }
+interface Skill { label: string; value: string; rewritten?: boolean }
+interface ExpRole {
+  title: string; company: string; location: string; dates: string;
+  bullets: Seg[][]
+}
+interface Project { name: string; tech: string; url: string; bullets: Seg[][] }
+interface ResumeConfig {
+  contact: { name: string; line: string }
+  skills: Skill[]
+  experience: ExpRole[]
+  education: { degree: string; university: string; dates: string; gpa: string }
+  projects: Project[]
 }
 
+// ─── Inline editable cell ──────────────────────────────────────────────────────
+function EditableCell({
+  value, onChange, multiline = false, style = {},
+  highlight = false, manualEdit = false,
+}: {
+  value: string; onChange: (v: string) => void;
+  multiline?: boolean; style?: React.CSSProperties;
+  highlight?: boolean; manualEdit?: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  const commit = useCallback(() => { onChange(draft); setEditing(false); }, [draft, onChange]);
+
+  const bg = manualEdit ? '#dbeafe' : highlight ? '#bbf7d0' : 'transparent';
+  const border = manualEdit ? '1.5px solid #93c5fd' : highlight ? '1.5px solid #4ade80' : '1.5px dashed transparent';
+
+  const sharedProps = {
+    value: draft,
+    onChange: (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => setDraft(e.target.value),
+    onBlur: commit,
+    autoFocus: true,
+    style: {
+      ...style,
+      border: '2px solid #6366f1',
+      borderRadius: 3,
+      padding: '2px 4px',
+      background: '#f0f9ff',
+      outline: 'none',
+      fontFamily: 'Arial, sans-serif',
+      fontSize: 'inherit',
+      width: '100%',
+    } as React.CSSProperties,
+  };
+
+  if (editing) {
+    return multiline ? (
+      <textarea {...sharedProps} rows={2} style={{ ...sharedProps.style, resize: 'vertical' }}
+        onKeyDown={e => { if (e.key === 'Escape') { setDraft(value); setEditing(false); } }} />
+    ) : (
+      <input {...sharedProps}
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value); setEditing(false); } }} />
+    );
+  }
+
+  return (
+    <span
+      onClick={() => { setDraft(value); setEditing(true); }}
+      title="Click to edit"
+      style={{
+        ...style, background: bg, border, borderRadius: 3,
+        padding: '1px 3px', cursor: 'text', whiteSpace: 'pre-wrap',
+      }}
+    >
+      {value}
+      <span style={{ fontSize: 8, marginLeft: 2, opacity: 0.35 }}>✎</span>
+    </span>
+  );
+}
+
+function SectionHead({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      fontWeight: 700, fontSize: '11pt', textTransform: 'uppercase',
+      borderBottom: '1.5px solid #000', paddingBottom: 2,
+      marginTop: 10, marginBottom: 6,
+    }}>{children}</div>
+  );
+}
+
+// ─── Live Resume Preview ───────────────────────────────────────────────────────
+function ResumePreview({
+  config, onChange, showHighlights,
+}: {
+  config: ResumeConfig; onChange: (c: ResumeConfig) => void; showHighlights: boolean;
+}) {
+  const upd = (patch: Partial<ResumeConfig>) => onChange({ ...config, ...patch });
+
+  const setSkillValue = (idx: number, value: string) =>
+    upd({ skills: config.skills.map((s, i) => i === idx ? { ...s, value, rewritten: false } : s) });
+
+  const setExpField = (ei: number, field: keyof ExpRole, value: string) =>
+    upd({ experience: config.experience.map((e, i) => i === ei ? { ...e, [field]: value } : e) });
+
+  const setBulletText = (ei: number, bi: number, text: string) =>
+    upd({
+      experience: config.experience.map((exp, i) => i !== ei ? exp : {
+        ...exp,
+        bullets: exp.bullets.map((segs, j) => j !== bi ? segs : [{ t: text, b: false, rewritten: false }])
+      })
+    });
+
+  const addBullet = (ei: number) =>
+    upd({
+      experience: config.experience.map((exp, i) => i !== ei ? exp : {
+        ...exp, bullets: [...exp.bullets, [{ t: 'New bullet — click to edit', b: false, rewritten: true }]]
+      })
+    });
+
+  const removeBullet = (ei: number, bi: number) =>
+    upd({
+      experience: config.experience.map((exp, i) => i !== ei ? exp : {
+        ...exp, bullets: exp.bullets.filter((_, j) => j !== bi)
+      })
+    });
+
+  const setProjectField = (pi: number, field: keyof Project, value: string) =>
+    upd({ projects: config.projects.map((p, i) => i === pi ? { ...p, [field]: value } : p) });
+
+  const setProjectBullet = (pi: number, bi: number, text: string) =>
+    upd({
+      projects: config.projects.map((p, i) => i !== pi ? p : {
+        ...p, bullets: p.bullets.map((segs, j) => j !== bi ? segs : [{ t: text, b: false, rewritten: false }])
+      })
+    });
+
+  return (
+    <div style={{
+      fontFamily: 'Arial, sans-serif', fontSize: '10pt', lineHeight: '1.35',
+      color: '#000', padding: '0.54in', width: '8.5in', minHeight: '11in',
+      boxSizing: 'border-box', background: '#fff', margin: '0 auto',
+    }}>
+
+      {/* Legend */}
+      {showHighlights && (
+        <div style={{
+          background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6,
+          padding: '4px 10px', marginBottom: 10, fontSize: 9, color: '#475569',
+          display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap',
+        }}>
+          <span><span style={{ background: '#bbf7d0', padding: '0 4px', borderRadius: 2 }}>green</span> = AI rewritten</span>
+          <span><span style={{ background: '#dbeafe', padding: '0 4px', borderRadius: 2 }}>blue</span> = your edits</span>
+          <span style={{ color: '#94a3b8' }}>✎ click any text to edit • ✕ removes bullet • + adds bullet</span>
+        </div>
+      )}
+
+      {/* Name */}
+      <div style={{ textAlign: 'center', marginBottom: 3 }}>
+        <EditableCell value={config.contact.name} onChange={v => upd({ contact: { ...config.contact, name: v } })}
+          style={{ fontWeight: 700, fontSize: '16pt' }} />
+      </div>
+      {/* Contact */}
+      <div style={{ textAlign: 'center', marginBottom: 12 }}>
+        <EditableCell value={config.contact.line} onChange={v => upd({ contact: { ...config.contact, line: v } })}
+          style={{ fontSize: '9.5pt' }} />
+      </div>
+
+      {/* SKILLS */}
+      <SectionHead>Technical Skills</SectionHead>
+      {config.skills.map((skill, idx) => (
+        <div key={skill.label} style={{ marginBottom: 4, display: 'flex', gap: 4, alignItems: 'flex-start' }}>
+          <span style={{
+            fontWeight: 700, whiteSpace: 'nowrap',
+            background: showHighlights && skill.rewritten ? '#bbf7d0' : 'transparent',
+            borderRadius: 2, padding: '0 2px',
+          }}>{skill.label}:</span>
+          <EditableCell value={skill.value} onChange={v => setSkillValue(idx, v)}
+            highlight={showHighlights && !!skill.rewritten}
+            style={{ fontSize: '10pt', flex: 1 }} />
+        </div>
+      ))}
+
+      {/* EXPERIENCE */}
+      <SectionHead>Experience</SectionHead>
+      {config.experience.map((exp, ei) => (
+        <div key={exp.company} style={{ marginBottom: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, marginBottom: 3 }}>
+            <span>
+              <EditableCell value={exp.title} onChange={v => setExpField(ei, 'title', v)} style={{ fontWeight: 700 }} />
+              {' | '}
+              <em>
+                <EditableCell value={exp.company} onChange={v => setExpField(ei, 'company', v)} style={{ fontStyle: 'italic' }} />
+                {', '}
+                <EditableCell value={exp.location} onChange={v => setExpField(ei, 'location', v)} style={{ fontStyle: 'italic' }} />
+              </em>
+            </span>
+            <em style={{ fontWeight: 400, whiteSpace: 'nowrap', marginLeft: 8 }}>
+              <EditableCell value={exp.dates} onChange={v => setExpField(ei, 'dates', v)} style={{ fontStyle: 'italic' }} />
+            </em>
+          </div>
+
+          {exp.bullets.map((segs, bi) => {
+            const fullText = segs.map(s => s.t).join('');
+            const wasRewritten = segs.some(s => s.rewritten === true);
+            const isManual = segs.length === 1 && segs[0].rewritten === false;
+            return (
+              <div key={bi} style={{
+                display: 'flex', alignItems: 'flex-start', gap: 4, marginBottom: 3, paddingLeft: 10,
+                background: showHighlights ? (wasRewritten ? '#f0fdf4' : isManual ? '#eff6ff' : 'transparent') : 'transparent',
+                borderLeft: showHighlights ? (wasRewritten ? '3px solid #4ade80' : isManual ? '3px solid #93c5fd' : '3px solid transparent') : '3px solid transparent',
+                borderRadius: 2, paddingTop: 1, paddingBottom: 1,
+              }}>
+                <span style={{ flexShrink: 0, marginTop: 2 }}>•</span>
+                <div style={{ flex: 1 }}>
+                  <EditableCell value={fullText} onChange={v => setBulletText(ei, bi, v)}
+                    multiline
+                    highlight={showHighlights && wasRewritten}
+                    manualEdit={showHighlights && isManual && !wasRewritten}
+                    style={{ fontSize: '10pt', display: 'block', width: '100%' }} />
+                </div>
+                <button onClick={() => removeBullet(ei, bi)}
+                  title="Remove bullet"
+                  style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 11, padding: '0 2px', opacity: 0.4 }}
+                  onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                  onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}
+                >✕</button>
+              </div>
+            );
+          })}
+          <button onClick={() => addBullet(ei)} style={{
+            marginLeft: 10, marginTop: 2, fontSize: 9, color: '#6366f1',
+            background: 'none', border: '1px dashed #a5b4fc', borderRadius: 4,
+            padding: '1px 8px', cursor: 'pointer',
+          }}>+ add bullet</button>
+        </div>
+      ))}
+
+      {/* EDUCATION */}
+      <SectionHead>Education</SectionHead>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+        <strong><em>
+          <EditableCell value={config.education.degree} onChange={v => upd({ education: { ...config.education, degree: v } })} style={{ fontWeight: 700, fontStyle: 'italic' }} />
+          {', '}
+          <EditableCell value={config.education.university} onChange={v => upd({ education: { ...config.education, university: v } })} style={{ fontWeight: 700, fontStyle: 'italic' }} />
+        </em></strong>
+        <em><EditableCell value={config.education.dates} onChange={v => upd({ education: { ...config.education, dates: v } })} style={{ fontStyle: 'italic' }} /></em>
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        <EditableCell value={config.education.gpa} onChange={v => upd({ education: { ...config.education, gpa: v } })} />
+      </div>
+
+      {/* PROJECTS */}
+      <SectionHead>Projects</SectionHead>
+      {config.projects.map((proj, pi) => (
+        <div key={proj.name} style={{ marginBottom: 6 }}>
+          <div style={{ marginBottom: 3, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'baseline' }}>
+            <strong><EditableCell value={proj.name} onChange={v => setProjectField(pi, 'name', v)} style={{ fontWeight: 700 }} /></strong>
+            {' | '}
+            <em style={{ fontSize: '9.5pt' }}><EditableCell value={proj.tech} onChange={v => setProjectField(pi, 'tech', v)} style={{ fontStyle: 'italic', fontSize: '9.5pt' }} /></em>
+            {' | '}
+            <a href={proj.url} style={{ color: '#1155CC' }}>GitHub</a>
+          </div>
+          {proj.bullets.map((segs, bi) => {
+            const fullText = segs.map(s => s.t).join('');
+            const wasRewritten = segs.some(s => s.rewritten === true);
+            return (
+              <div key={bi} style={{
+                display: 'flex', gap: 6, paddingLeft: 12, marginBottom: 2,
+                background: showHighlights && wasRewritten ? '#f0fdf4' : 'transparent',
+                borderLeft: showHighlights && wasRewritten ? '3px solid #4ade80' : '3px solid transparent',
+                borderRadius: 2,
+              }}>
+                <span style={{ flexShrink: 0 }}>•</span>
+                <EditableCell value={fullText} onChange={v => setProjectBullet(pi, bi, v)}
+                  multiline highlight={showHighlights && wasRewritten}
+                  style={{ fontSize: '10pt', flex: 1 }} />
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Main ──────────────────────────────────────────────────────────────────────
 export default function ResumeTailor() {
-  const [jobDescription, setJobDescription] = useState('');
-  const [resumeText, setResumeText] = useState('');
-  const [resumeFile, setResumeFile] = useState<File | null>(null);
-  const [mode, setMode] = useState<'fulltime' | 'ctoc'>('fulltime');
+  const [jd, setJd] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [output, setOutput] = useState<ResumeOutput | null>(null);
-  const [htmlPreview, setHtmlPreview] = useState<string | null>(null);
-  const [docxBase64, setDocxBase64] = useState<string | null>(null);
+  const [config, setConfig] = useState<ResumeConfig | null>(null);
   const [generationTime, setGenerationTime] = useState<string | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editableHtml, setEditableHtml] = useState<string>('');
-  const [downloadFormat, setDownloadFormat] = useState<'pdf' | 'docx'>('docx');
-  const [roleName, setRoleName] = useState<string>('Position');
-  const [hasEdits, setHasEdits] = useState(false);
-  
-  // User credentials (defaults to Poojith's info)
-  const [userName, setUserName] = useState('Poojith Reddy A');
-  const [userEmail, setUserEmail] = useState('poojithreddy.se@gmail.com');
-  const [userPhone, setUserPhone] = useState('312-536-9779');
-  const [userLinkedIn, setUserLinkedIn] = useState('https://www.linkedin.com/in/poojith-reddy-com/');
+  const [roleName, setRoleName] = useState('Resume');
+  const [charCount, setCharCount] = useState(0);
+  const [showHighlights, setShowHighlights] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.name.match(/\.(pdf|docx?)$/i)) {
-      setError('Please upload a PDF or DOCX file');
+  const generate = async () => {
+    if (!jd.trim() || jd.trim().length < 50) {
+      setError('Paste a full job description (at least 50 characters).');
       return;
     }
-
-    setResumeFile(file);
-    setResumeText('');
-    setError('');
-  };
-
-  const generateResume = async () => {
-    if (!jobDescription.trim()) {
-      setError('Please enter a job description');
-      return;
-    }
-
-    // Resume is optional - will use default if not provided
-    // User can provide text or file, or leave empty for default resume
-
-    setLoading(true);
-    setError('');
-    setOutput(null);
-    setHtmlPreview(null);
-    setDocxBase64(null);
-    setGenerationTime(null);
-    setHasEdits(false);
-
+    setLoading(true); setError(''); setConfig(null);
     try {
-      const formData = new FormData();
-      formData.append('jobDescription', jobDescription);
-      formData.append('mode', mode);
-      formData.append('userName', userName);
-      formData.append('userEmail', userEmail);
-      formData.append('userPhone', userPhone);
-      formData.append('userLinkedIn', userLinkedIn);
-      
-      // Send resume file or text if provided
-      if (resumeFile) {
-        formData.append('resumeFile', resumeFile);
-      } else if (resumeText.trim()) {
-        formData.append('resumeText', resumeText);
-      }
-      // If no resume provided, backend will use default resume
-
-      // Always use DOCX API endpoint
-      const endpoint = '/api/tailor-resume-pdf';
-      
-      const response = await fetch(endpoint, {
+      const t0 = Date.now();
+      const res = await fetch('/api/tailor-resume', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobDescription: jd, mode: 'full' }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate resume');
-      }
-
-      // Handle DOCX JSON response with preview
-      const data = await response.json();
-      setHtmlPreview(data.htmlPreview);
-      setDocxBase64(data.docxBase64);
-      setGenerationTime(data.generationTime);
-      
-      // Extract job role from JD for filename
-      const roleMatch = jobDescription.match(/(?:position|role|title|hiring|for|developer|engineer|looking for|seeking)\s*:?\s*([^\n,.!?]{3,50})/i);
-      let role = 'Position';
-      if (roleMatch) {
-        role = roleMatch[1].trim()
-          .replace(/^(a|an|the)\s+/i, '')
-          .replace(/[^a-zA-Z0-9\s]/g, '')
-          .replace(/\s+/g, '_')
-          .substring(0, 30);
-      }
-      setRoleName(role);
-    } catch (err) {
-      setError('Error generating resume: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fast test mode for quick formatting validation (completes in under 5 seconds)
-  const testFormatting = async () => {
-    setLoading(true);
-    setError('');
-    setOutput(null);
-    setHtmlPreview(null);
-    setDocxBase64(null);
-    setGenerationTime(null);
-    setHasEdits(false);
-
-    try {
-      const response = await fetch('/api/test-resume-format', { method: 'POST' });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Test mode failed');
-      }
-
-      const data = await response.json();
-      setHtmlPreview(data.htmlPreview);
-      setDocxBase64(data.docxBase64);
-      setGenerationTime(data.generationTime);
-      setRoleName('TestFormat');
-    } catch (err) {
-      setError('Test mode error: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
-      setLoading(false);
-    }
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed'); }
+      const data = await res.json();
+      setConfig(data.config);
+      setGenerationTime(((Date.now() - t0) / 1000).toFixed(1) + 's');
+      const m = jd.match(/(?:position|role|title|hiring|looking for|seeking)[:\s]+([^\n,.!?]{3,50})/i);
+      if (m) setRoleName(m[1].trim().replace(/^(a|an|the)\s+/i, '').replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').slice(0, 30));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong.');
+    } finally { setLoading(false); }
   };
 
   const downloadDocx = async () => {
-    // Use first name from userName for filename
-    const firstName = userName.split(' ')[0] || 'Resume';
-    const filename = `${firstName}_${roleName}.docx`;
-    
-    // If user made edits, convert edited HTML to DOCX
-    if (hasEdits && htmlPreview) {
-      try {
-        // Dynamically import html-docx library (client-side only)
-        const htmlDocx = (await import('html-docx-js-typescript')).default;
-        
-        // Convert HTML to DOCX (async operation)
-        const converted = await htmlDocx.asBlob(htmlPreview);
-        
-        // Ensure we have a Blob (convert Buffer if needed)
-        let blob: Blob;
-        if (converted instanceof Blob) {
-          blob = converted;
-        } else {
-          // Convert Buffer to Uint8Array then to Blob
-          const uint8Array = new Uint8Array(converted.buffer as ArrayBuffer);
-          blob = new Blob([uint8Array], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-        }
-        
-        // Create download link
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      } catch (error) {
-        console.error('Error converting edited HTML to DOCX:', error);
-        alert('Failed to generate DOCX from edited content. Please try PDF format.');
-      }
-      return;
-    }
-    
-    // Otherwise, use original base64 DOCX
-    if (!docxBase64) return;
-    
-    // Convert base64 to blob
-    const byteCharacters = atob(docxBase64);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-    
-    // Create download link
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadAsPDF = async () => {
-    if (!htmlPreview) return;
-
-    // Use first name from userName for filename
-    const firstName = userName.split(' ')[0] || 'Resume';
-    const filename = `${firstName}_${roleName}.pdf`;
-    
+    if (!config) return;
+    setDownloading(true);
     try {
-      // Dynamically import html2pdf (client-side only)
-      const html2pdf = (await import('html2pdf.js')).default;
-      
-      // Create a temporary container for the HTML
-      const element = document.createElement('div');
-      element.innerHTML = htmlPreview;
-      element.style.width = '8.5in';
-      element.style.padding = '0.5in';
-      element.style.backgroundColor = 'white';
-      
-      const opt = {
-        margin: 0.5,
-        filename: filename,
-        image: { type: 'jpeg' as const, quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'in' as const, format: 'letter' as const, orientation: 'portrait' as const }
-      };
-
-      await html2pdf().set(opt).from(element).save();
-    } catch (error) {
-      console.error('PDF generation error:', error);
-      alert('Failed to generate PDF. Please try downloading as DOCX instead.');
-    }
+      const res = await fetch('/api/tailor-resume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobDescription: jd, mode: 'build-docx', config }),
+      });
+      if (!res.ok) throw new Error('DOCX build failed');
+      const data = await res.json();
+      const bytes = atob(data.docxBase64);
+      const arr = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+      const blob = new Blob([arr], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement('a'), { href: url, download: `Poojith_${roleName}.docx` });
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch { setError('Download failed. Try again.'); }
+    finally { setDownloading(false); }
   };
 
-  const handleDownload = async () => {
-    if (downloadFormat === 'pdf') {
-      await downloadAsPDF();
-    } else {
-      await downloadDocx();
-    }
-  };
+  const reset = () => { setJd(''); setCharCount(0); setConfig(null); setError(''); setRoleName('Resume'); };
 
-  const handleEditMode = () => {
-    if (!isEditMode) {
-      setEditableHtml(htmlPreview || '');
-    }
-    setIsEditMode(!isEditMode);
-  };
-
-  const handleSaveEdits = () => {
-    setHtmlPreview(editableHtml);
-    setHasEdits(true);
-    setIsEditMode(false);
-  };
-
-  const handleCancelEdit = () => {
-    setEditableHtml(htmlPreview || '');
-    setIsEditMode(false);
-  };
+  const rewrites = config ? (() => {
+    let n = 0;
+    config.skills.forEach(s => { if (s.rewritten) n++; });
+    config.experience.forEach(exp => exp.bullets.forEach(b => { if (b.some(s => s.rewritten)) n++; }));
+    config.projects.forEach(p => p.bullets.forEach(b => { if (b.some(s => s.rewritten)) n++; }));
+    return n;
+  })() : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 relative overflow-hidden pt-16 sm:pt-20 transition-colors duration-300">
-      {/* Animated gradient background */}
-      <div className="absolute inset-0 z-0">
-        <GradientBackground />
-      </div>
-      
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-12 relative z-10">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-12"
-        >
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2">Resume Tailor</h1>
-          <p className="text-base text-gray-600 dark:text-gray-400">Customize your resume for specific job descriptions</p>
+    <div className="min-h-screen bg-[#0a0a0f] text-white relative overflow-hidden pt-16 sm:pt-20">
+      <div className="absolute inset-0 opacity-[0.03]" style={{
+        backgroundImage: `linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px)`,
+        backgroundSize: '40px 40px',
+      }} />
+      <div className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-[900px] h-[400px] rounded-full bg-indigo-600/10 blur-[120px] pointer-events-none" />
+
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10 text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-medium mb-4">
+            <Sparkles className="w-3 h-3" /> Powered by Claude AI
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-2">Resume Tailor</h1>
+          <p className="text-gray-400 text-sm max-w-lg mx-auto">
+            Full AI rewrite — bullets, skills, projects tailored to the JD. Edit anything inline. Download clean DOCX.
+          </p>
         </motion.div>
 
-        {/* Main Form */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.1 }}
-          whileHover={{ scale: 1.002 }}
-          className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-700 p-4 sm:p-6 mb-4 sm:mb-6 shadow-2xl hover:shadow-3xl transition-shadow"
-        >
-          {/* Mode Toggle */}
-          <div className="mb-6">
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Employment Type</label>
-            <div className="inline-flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-              <button
-                onClick={() => setMode('fulltime')}
-                className={`px-6 py-2 rounded-md text-xs font-medium transition-all flex items-center gap-2 ${
-                  mode === 'fulltime'
-                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                <Briefcase className="w-3 h-3" />
-                Full-Time
-              </button>
-              <button
-                onClick={() => setMode('ctoc')}
-                className={`px-6 py-2 rounded-md text-xs font-medium transition-all flex items-center gap-2 ${
-                  mode === 'ctoc'
-                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                    : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                <UserCircle className="w-3 h-3" />
-                C-to-C
-              </button>
-            </div>
-          </div>
-
-          {/* Job Description */}
-          <div className="mb-6">
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Job Description</label>
-            <textarea
-              value={jobDescription}
-              onChange={(e) => setJobDescription(e.target.value)}
-              rows={8}
-              className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all resize-none"
-              placeholder="Paste the job description here..."
-            />
-          </div>
-
-          {/* User Credentials - COMMENTED OUT FOR MAIN USER FLOW */}
-          {/* <div className="mb-6">
-              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Your Information</label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <input
-                  type="text"
-                  value={userName}
-                  onChange={(e) => setUserName(e.target.value)}
-                  className="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
-                  placeholder="Full Name"
+        <AnimatePresence mode="wait">
+          {!config ? (
+            <motion.div key="input" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} className="max-w-3xl mx-auto">
+              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+                  <span className="text-xs font-medium text-gray-400 uppercase tracking-widest">Job Description</span>
+                  <span className="text-xs text-gray-600 tabular-nums">{charCount.toLocaleString()} chars</span>
+                </div>
+                <textarea
+                  value={jd}
+                  onChange={e => { setJd(e.target.value); setCharCount(e.target.value.length); }}
+                  rows={16}
+                  className="w-full bg-transparent px-5 py-4 text-sm text-gray-200 placeholder-gray-600 focus:outline-none resize-none leading-relaxed"
+                  placeholder="Paste the full job description here — Claude will fully rewrite your resume to match it..."
                 />
-                <input
-                  type="email"
-                  value={userEmail}
-                  onChange={(e) => setUserEmail(e.target.value)}
-                  className="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
-                  placeholder="Email"
-                />
+                <div className="flex items-center justify-between px-5 py-3 border-t border-white/[0.06] bg-white/[0.02]">
+                  <p className="text-xs text-gray-600">More detail = better rewrite</p>
+                  {jd && <button onClick={() => { setJd(''); setCharCount(0); }} className="text-xs text-gray-600 hover:text-gray-400 px-2 py-1">Clear</button>}
+                </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input
-                  type="tel"
-                  value={userPhone}
-                  onChange={(e) => setUserPhone(e.target.value)}
-                  className="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
-                  placeholder="Phone Number"
-                />
-                <input
-                  type="url"
-                  value={userLinkedIn}
-                  onChange={(e) => setUserLinkedIn(e.target.value)}
-                  className="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all"
-                  placeholder="LinkedIn Profile URL"
-                />
-              </div>
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                💡 Your contact information will be used in the generated resume header
-              </p>
-          </div> */}
 
-          {/* Resume Input */}
-          <div className="mb-6">
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Your Resume (Optional)</label>
-            
-            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-              <p className="text-xs text-gray-700 dark:text-gray-300">
-                💡 Upload a PDF/DOCX file or paste resume text. If no resume is provided, a default resume will be used. Supports PDF extraction with proper formatting.
-              </p>
-            </div>
-            
-            {/* File Upload */}
-            <div className="mb-4">
-              <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 hover:border-gray-400 dark:hover:border-gray-500 transition-colors">
-                <input
-                  type="file"
-                  accept=".pdf,.docx,.doc"
-                  onChange={handleFileUpload}
-                  className="w-full text-xs text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-gray-900 dark:file:bg-white file:text-white dark:file:text-gray-900 hover:file:bg-gray-800 dark:hover:file:bg-gray-100 transition-all"
-                />
-                {resumeFile && (
-                  <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 flex items-center">
-                    <FileText className="w-3 h-3 mr-2" />
-                    {resumeFile.name}
-                  </p>
+              {error && <p className="mt-3 text-xs text-red-400 px-1">{error}</p>}
+
+              <motion.button
+                onClick={generate} disabled={loading}
+                whileHover={{ scale: loading ? 1 : 1.01 }} whileTap={{ scale: loading ? 1 : 0.99 }}
+                className="mt-4 w-full py-3.5 rounded-xl font-medium text-sm bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-900/40 disabled:text-indigo-600 text-white flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/30 transition-all"
+              >
+                {loading ? (
+                  <><motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full" />Rewriting resume for this JD...</>
+                ) : (
+                  <><Sparkles className="w-4 h-4" />Generate &amp; Fully Rewrite</>
                 )}
-              </div>
-            </div>
+              </motion.button>
 
-            {/* Text Input */}
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200 dark:border-gray-700"></div>
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">or paste text</span>
-              </div>
-            </div>
-
-            <textarea
-              value={resumeText}
-              onChange={(e) => {
-                setResumeText(e.target.value);
-                if (e.target.value) setResumeFile(null);
-              }}
-              rows={6}
-              disabled={!!resumeFile}
-              className="w-full mt-4 px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all resize-none disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-500 dark:disabled:text-gray-500"
-              placeholder="Paste your resume text here..."
-            />
-          </div>
-
-          {/* Error */}
-          <AnimatePresence>
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
-              >
-                <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Generate Button */}
-          <div className="space-y-3">
-            <motion.button
-              onClick={generateResume}
-              disabled={loading}
-              whileHover={{ scale: loading ? 1 : 1.02 }}
-              whileTap={{ scale: loading ? 1 : 0.98 }}
-              className="w-full py-3 bg-gray-900 dark:bg-white hover:bg-black dark:hover:bg-gray-100 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white dark:text-gray-900 text-sm font-medium rounded-lg transition-all disabled:cursor-not-allowed flex items-center justify-center"
-            >
-              {loading ? (
-                <>
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    className="w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"
-                  />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Upload className="w-4 h-4 mr-2" />
-                  Generate Resume
-                </>
+              {loading && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 space-y-2">
+                  {['Analyzing JD domain and required skills...', 'Rewriting bullet points with JD keywords...', 'Rephrasing skills rows for ATS match...', 'Rewriting project descriptions to match domain...', 'Building editable config...'].map((step, i) => (
+                    <motion.div key={step} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.5 }} className="flex items-center gap-2 text-xs text-gray-500">
+                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse flex-shrink-0" />{step}
+                    </motion.div>
+                  ))}
+                </motion.div>
               )}
-            </motion.button>
 
-            {/* Test Formatting Button - Fast validation mode */}
-            <motion.button
-              onClick={testFormatting}
-              disabled={loading}
-              whileHover={{ scale: loading ? 1 : 1.02 }}
-              whileTap={{ scale: loading ? 1 : 0.98 }}
-              className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white text-sm font-medium rounded-lg transition-all disabled:cursor-not-allowed flex items-center justify-center"
-            >
-              🧪 Test Formatting (Fast - Under 5 sec)
-            </motion.button>
-          </div>
-        </motion.div>
-
-        {/* Output */}
-        <AnimatePresence>
-          {/* DOCX Preview */}
-          {htmlPreview && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-4"
-            >
-              {/* Generation Time and Download Header */}
-              <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-green-100 dark:bg-green-800 rounded-full flex items-center justify-center flex-shrink-0">
-                    <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-green-900 dark:text-green-400">Resume Generated Successfully!</p>
-                    <p className="text-xs text-green-700 dark:text-green-400">
-                      Generated in {generationTime} • {
-                        hasEdits 
-                          ? '✏️ Edits will be applied to downloads' 
-                          : isEditMode 
-                            ? 'Edit mode active' 
-                            : 'Preview below and download when ready'
-                      }
-                    </p>
-                  </div>
+              {!loading && (
+                <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { icon: '✍️', label: 'Full bullet rewrite' },
+                    { icon: '🎯', label: 'JD keyword injection' },
+                    { icon: '✏️', label: 'Click-to-edit inline' },
+                    { icon: '📄', label: '1-page DOCX output' },
+                  ].map(f => (
+                    <div key={f.label} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-center">
+                      <div className="text-lg mb-1">{f.icon}</div>
+                      <p className="text-[11px] text-gray-500">{f.label}</p>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex gap-2 w-full sm:w-auto">
-                  {!isEditMode && (
-                    <motion.button
-                      onClick={handleEditMode}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="flex-1 sm:flex-none px-4 py-2 bg-amber-600 dark:bg-amber-700 hover:bg-amber-700 dark:hover:bg-amber-800 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Edit3 className="w-3 h-3" />
-                      Edit Content
-                    </motion.button>
-                  )}
-                  <motion.button
-                    onClick={handleDownload}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="flex-1 sm:flex-none px-4 py-2 bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-gray-900 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              )}
+            </motion.div>
+
+          ) : (
+            <motion.div key="editor" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+
+              {/* Toolbar */}
+              <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-emerald-500/15 flex items-center justify-center">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold leading-none">
+                        Resume Ready
+                        {rewrites > 0 && <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300">{rewrites} AI rewrites</span>}
+                      </p>
+                      {generationTime && <p className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{generationTime}</p>}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowHighlights(h => !h)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${showHighlights ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-white/[0.04] border-white/[0.08] text-gray-400'}`}
                   >
-                    <Download className="w-3 h-3" />
-                    Download {downloadFormat.toUpperCase()}
+                    {showHighlights ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                    {showHighlights ? 'Highlights on' : 'Highlights off'}
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <motion.button
+                    onClick={downloadDocx} disabled={downloading}
+                    whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    className="px-5 py-2.5 rounded-xl font-medium text-sm bg-white text-gray-900 hover:bg-gray-100 disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-black/20 transition-all"
+                  >
+                    {downloading
+                      ? <><motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full" />Building...</>
+                      : <><Download className="w-4 h-4" />Download DOCX</>}
                   </motion.button>
+                  <button onClick={reset} className="px-4 py-2.5 rounded-xl text-sm text-gray-400 hover:text-gray-200 border border-white/[0.08] hover:border-white/[0.15] flex items-center gap-2 transition-all">
+                    <RotateCcw className="w-3.5 h-3.5" />New
+                  </button>
                 </div>
               </div>
 
-              {/* Format Selector */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-0.5">Download Format</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Choose your preferred file format</p>
-                  </div>
-                  <div className="flex gap-2 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
-                    <button
-                      onClick={() => setDownloadFormat('docx')}
-                      className={`px-4 py-2 rounded-md text-xs font-medium transition-all ${
-                        downloadFormat === 'docx'
-                          ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                          : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-3 h-3" />
-                        DOCX
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => setDownloadFormat('pdf')}
-                      className={`px-4 py-2 rounded-md text-xs font-medium transition-all ${
-                        downloadFormat === 'pdf'
-                          ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                          : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-3 h-3" />
-                        PDF
-                      </div>
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                  📄 <strong>Filename:</strong> Poojith_Reddy_{roleName}.{downloadFormat}
-                </div>
+              {error && <p className="mb-4 text-xs text-red-400">{error}</p>}
+
+              <div className="mb-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-4 py-2.5 flex items-center gap-2">
+                <Pencil className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                <p className="text-xs text-gray-400">
+                  <span className="text-indigo-300 font-medium">Click any text to edit it.</span>
+                  {' '}Press <kbd className="px-1 py-0.5 rounded bg-white/10 text-[10px]">Enter</kbd> to save,{' '}
+                  <kbd className="px-1 py-0.5 rounded bg-white/10 text-[10px]">Esc</kbd> to cancel. ✕ removes a bullet. + adds one.
+                </p>
               </div>
 
-              {/* Preview or Edit Mode */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="bg-gray-100 dark:bg-gray-700 px-3 sm:px-4 py-2.5 border-b border-gray-200 dark:border-gray-600 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    {isEditMode ? '✏️ Edit Mode - Fix typos, spacing, or content' : `📄 Preview - Poojith_Reddy_${roleName}.${downloadFormat}`}
-                  </p>
-                  {isEditMode && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleSaveEdits}
-                        className="px-4 py-1.5 bg-green-600 dark:bg-green-700 hover:bg-green-700 dark:hover:bg-green-800 text-white text-sm font-medium rounded transition-colors"
-                      >
-                        Save Changes
-                      </button>
-                      <button
-                        onClick={handleCancelEdit}
-                        className="px-4 py-1.5 bg-gray-600 dark:bg-gray-700 hover:bg-gray-700 dark:hover:bg-gray-800 text-white text-sm font-medium rounded transition-colors"
-                      >
-                        Cancel
-                      </button>
+              <div className="rounded-2xl border border-white/[0.07] bg-white overflow-hidden shadow-2xl shadow-black/40">
+                <div className="bg-gray-100 border-b border-gray-200 px-4 py-2 flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-500">📄 Poojith_{roleName}.docx — Live Editor</span>
+                  {showHighlights && (
+                    <div className="flex items-center gap-3 text-[10px] text-gray-500">
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-green-200 border border-green-400 inline-block" />AI rewritten</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-blue-100 border border-blue-300 inline-block" />Your edits</span>
                     </div>
                   )}
                 </div>
-                <div className="p-3 sm:p-6 max-h-[600px] overflow-y-auto">
-                  {isEditMode ? (
-                    <div className="space-y-3">
-                      <div className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4 mb-4">
-                        <p className="text-xs text-gray-800 dark:text-gray-300">
-                          <strong>💡 Edit Mode:</strong> You can edit the HTML content below to fix typos, spacing, or adjust any text. 
-                          <br />
-                          <strong>Note:</strong> Edits only update the preview and PDF downloads. To edit the DOCX file, you&apos;ll need to open it in Word after downloading.
-                        </p>
-                      </div>
-                      <textarea
-                        value={editableHtml}
-                        onChange={(e) => setEditableHtml(e.target.value)}
-                        className="w-full h-[500px] p-4 font-mono text-xs border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500"
-                        spellCheck={false}
-                      />
-                    </div>
-                  ) : (
-                    <iframe
-                      srcDoc={htmlPreview || undefined}
-                      title="Resume Preview"
-                      className="w-full min-h-[800px] border-0"
-                      style={{ backgroundColor: 'white' }}
-                    />
-                  )}
+                <div className="overflow-x-auto">
+                  <ResumePreview config={config} onChange={setConfig} showHighlights={showHighlights} />
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <button
-                  onClick={handleDownload}
-                  className="px-5 py-2 bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 text-white dark:text-gray-900 text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <Download className="w-3 h-3" />
-                  Download {downloadFormat.toUpperCase()}
-                </button>
-                <button
-                  onClick={() => {
-                    setHtmlPreview(null);
-                    setDocxBase64(null);
-                    setGenerationTime(null);
-                  }}
-                  className="px-5 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg transition-colors"
-                >
-                  Generate New Resume
-                </button>
-              </div>
+              <p className="mt-3 text-center text-[11px] text-gray-600">
+                Highlights &amp; edit controls are preview-only — downloaded DOCX is clean with locked formatting
+              </p>
             </motion.div>
           )}
         </AnimatePresence>
