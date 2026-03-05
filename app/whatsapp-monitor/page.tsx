@@ -409,7 +409,7 @@ export default function WhatsAppMonitor() {
                     }`}
                   >
                     <Mail className="w-3 h-3 flex-shrink-0" />
-                    <span className="truncate">poojithreddy.se@gmail.com</span>
+                    <span className="truncate text-[11px] sm:text-xs">poojithreddy.se@gmail.com</span>
                   </button>
                   <button
                     onClick={() => switchAccount('dev')}
@@ -420,7 +420,7 @@ export default function WhatsAppMonitor() {
                     }`}
                   >
                     <Mail className="w-3 h-3 flex-shrink-0" />
-                    <span className="truncate">poojithreddy.dev@gmail.com</span>
+                    <span className="truncate text-[11px] sm:text-xs">poojithreddy.dev@gmail.com</span>
                   </button>
                 </div>
               </div>
@@ -446,7 +446,7 @@ export default function WhatsAppMonitor() {
                   <Clock className="w-3 h-3 inline mr-1" />
                   Search messages from the last:
                 </label>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                   {[
                     { value: 5, label: '5 mins' },
                     { value: 15, label: '15 mins' },
@@ -458,7 +458,7 @@ export default function WhatsAppMonitor() {
                     <button
                       key={option.value}
                       onClick={() => setTimeRange(option.value as 5 | 15 | 30 | 60 | 120 | 360)}
-                      className={`flex-1 min-w-[70px] sm:min-w-[90px] px-2 sm:px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                      className={`px-2 sm:px-3 py-2 rounded-lg text-xs font-medium transition-colors text-center ${
                         timeRange === option.value
                           ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
@@ -761,8 +761,8 @@ export default function WhatsAppMonitor() {
                       <textarea
                         value={msg.generatedEmail.body}
                         onChange={(e) => updateGeneratedEmail(msg.id, 'body', e.target.value)}
-                        rows={8}
-                        className="w-full px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent"
+                        rows={5}
+                        className="w-full px-3 py-2 text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent resize-y min-h-[100px]"
                       />
                     </div>
 

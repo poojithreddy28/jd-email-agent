@@ -41,8 +41,8 @@ const Navigation = () => {
         className="fixed top-0 left-0 right-0 z-50 flex justify-center px-3 sm:px-6 py-3 sm:py-4"
         style={{ willChange: 'transform, opacity' }}
       >
-        <div className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-md border border-gray-200/50 dark:border-gray-700/50 rounded-full px-4 sm:px-6 py-2.5 shadow-lg transition-colors duration-300 w-full max-w-fit">
-          <div className="flex items-center gap-2 sm:gap-3">
+        <div className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-md border border-gray-200/50 dark:border-gray-700/50 rounded-full px-3 sm:px-6 py-2 sm:py-2.5 shadow-lg transition-colors duration-300 w-auto max-w-[calc(100vw-24px)] sm:max-w-fit">
+          <div className="flex items-center gap-1.5 sm:gap-3">
             <Link href="/" className="text-sm sm:text-base font-bold text-gray-900 dark:text-white hover:text-gray-700 dark:hover:text-gray-300 transition-colors whitespace-nowrap">
               Job Assist
             </Link>

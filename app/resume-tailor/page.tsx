@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, Download, RotateCcw, CheckCircle2, Clock,
@@ -287,6 +287,44 @@ function ResumePreview({
   );
 }
 
+// ─── Responsive Resume Preview Wrapper ─────────────────────────────────────────
+function ResumePreviewScaled({
+  config, onChange, showHighlights,
+}: {
+  config: ResumeConfig; onChange: (c: ResumeConfig) => void; showHighlights: boolean;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const updateScale = () => {
+      if (containerRef.current) {
+        const containerWidth = containerRef.current.offsetWidth;
+        const resumeWidth = 816; // 8.5in at 96dpi
+        const newScale = Math.min(1, containerWidth / resumeWidth);
+        setScale(newScale);
+      }
+    };
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="overflow-hidden">
+      <div
+        style={{
+          transform: `scale(${scale})`,
+          transformOrigin: 'top left',
+          width: `${100 / scale}%`,
+        }}
+      >
+        <ResumePreview config={config} onChange={onChange} showHighlights={showHighlights} />
+      </div>
+    </div>
+  );
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────────
 export default function ResumeTailor() {
   const [jd, setJd] = useState('');
@@ -387,8 +425,8 @@ export default function ResumeTailor() {
                 <textarea
                   value={jd}
                   onChange={e => { setJd(e.target.value); setCharCount(e.target.value.length); }}
-                  rows={16}
-                  className="w-full bg-transparent px-5 py-4 text-sm text-gray-200 placeholder-gray-600 focus:outline-none resize-none leading-relaxed"
+                  rows={10}
+                  className="w-full bg-transparent px-4 sm:px-5 py-3 sm:py-4 text-sm text-gray-200 placeholder-gray-600 focus:outline-none resize-y min-h-[200px] leading-relaxed"
                   placeholder="Paste the full job description here — Claude will fully rewrite your resume to match it..."
                 />
                 <div className="flex items-center justify-between px-5 py-3 border-t border-white/[0.06] bg-white/[0.02]">
@@ -442,10 +480,10 @@ export default function ResumeTailor() {
             <motion.div key="editor" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
 
               {/* Toolbar */}
-              <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-                <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-5 gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-emerald-500/15 flex items-center justify-center">
+                    <div className="w-7 h-7 rounded-full bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                     </div>
                     <div>
@@ -458,7 +496,7 @@ export default function ResumeTailor() {
                   </div>
                   <button
                     onClick={() => setShowHighlights(h => !h)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${showHighlights ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-white/[0.04] border-white/[0.08] text-gray-400'}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all w-fit ${showHighlights ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-white/[0.04] border-white/[0.08] text-gray-400'}`}
                   >
                     {showHighlights ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                     {showHighlights ? 'Highlights on' : 'Highlights off'}
@@ -468,7 +506,7 @@ export default function ResumeTailor() {
                   <motion.button
                     onClick={downloadDocx} disabled={downloading}
                     whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                    className="px-5 py-2.5 rounded-xl font-medium text-sm bg-white text-gray-900 hover:bg-gray-100 disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-black/20 transition-all"
+                    className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 rounded-xl font-medium text-sm bg-white text-gray-900 hover:bg-gray-100 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-black/20 transition-all"
                   >
                     {downloading
                       ? <><motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full" />Building...</>
@@ -482,28 +520,28 @@ export default function ResumeTailor() {
 
               {error && <p className="mb-4 text-xs text-red-400">{error}</p>}
 
-              <div className="mb-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-4 py-2.5 flex items-center gap-2">
-                <Pencil className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                <p className="text-xs text-gray-400">
+              <div className="mb-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 px-3 sm:px-4 py-2.5 flex items-start sm:items-center gap-2">
+                <Pencil className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0 mt-0.5 sm:mt-0" />
+                <p className="text-xs text-gray-400 leading-relaxed">
                   <span className="text-indigo-300 font-medium">Click any text to edit it.</span>
-                  {' '}Press <kbd className="px-1 py-0.5 rounded bg-white/10 text-[10px]">Enter</kbd> to save,{' '}
-                  <kbd className="px-1 py-0.5 rounded bg-white/10 text-[10px]">Esc</kbd> to cancel. ✕ removes a bullet. + adds one.
+                  <span className="hidden sm:inline">
+                    {' '}Press <kbd className="px-1 py-0.5 rounded bg-white/10 text-[10px]">Enter</kbd> to save,{' '}
+                    <kbd className="px-1 py-0.5 rounded bg-white/10 text-[10px]">Esc</kbd> to cancel. ✕ removes a bullet. + adds one.
+                  </span>
                 </p>
               </div>
 
               <div className="rounded-2xl border border-white/[0.07] bg-white overflow-hidden shadow-2xl shadow-black/40">
                 <div className="bg-gray-100 border-b border-gray-200 px-4 py-2 flex items-center justify-between">
-                  <span className="text-xs font-medium text-gray-500">📄 Poojith_{roleName}.docx — Live Editor</span>
+                  <span className="text-xs font-medium text-gray-500 truncate">📄 Poojith_{roleName}.docx — Live Editor</span>
                   {showHighlights && (
-                    <div className="flex items-center gap-3 text-[10px] text-gray-500">
+                    <div className="hidden sm:flex items-center gap-3 text-[10px] text-gray-500">
                       <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-green-200 border border-green-400 inline-block" />AI rewritten</span>
                       <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-blue-100 border border-blue-300 inline-block" />Your edits</span>
                     </div>
                   )}
                 </div>
-                <div className="overflow-x-auto">
-                  <ResumePreview config={config} onChange={setConfig} showHighlights={showHighlights} />
-                </div>
+                <ResumePreviewScaled config={config} onChange={setConfig} showHighlights={showHighlights} />
               </div>
 
               <p className="mt-3 text-center text-[11px] text-gray-600">

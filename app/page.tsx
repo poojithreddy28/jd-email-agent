@@ -170,7 +170,7 @@ export default function EmailGenerator() {
             <div className="inline-flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
               <button
                 onClick={() => setMode('single')}
-                className={`px-6 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`px-3 sm:px-6 py-2 rounded-md text-xs font-medium transition-all ${
                   mode === 'single'
                     ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
                     : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
@@ -180,7 +180,7 @@ export default function EmailGenerator() {
               </button>
               <button
                 onClick={() => setMode('multiple')}
-                className={`px-6 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`px-3 sm:px-6 py-2 rounded-md text-xs font-medium transition-all ${
                   mode === 'multiple'
                     ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
                     : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
@@ -207,7 +207,7 @@ export default function EmailGenerator() {
                 }`}
               >
                 <Mail className="w-3 h-3 flex-shrink-0" />
-                <span className="truncate">poojithreddy.se@gmail.com</span>
+                <span className="truncate text-[11px] sm:text-xs">poojithreddy.se@gmail.com</span>
               </button>
               <button
                 onClick={() => switchAccount('dev')}
@@ -218,7 +218,7 @@ export default function EmailGenerator() {
                 }`}
               >
                 <Mail className="w-3 h-3 flex-shrink-0" />
-                <span className="truncate">poojithreddy.dev@gmail.com</span>
+                <span className="truncate text-[11px] sm:text-xs">poojithreddy.dev@gmail.com</span>
               </button>
             </div>
           </div>
@@ -296,8 +296,8 @@ export default function EmailGenerator() {
                   exit={{ opacity: 0 }}
                   value={jd}
                   onChange={(e) => setJd(e.target.value)}
-                  rows={8}
-                  className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all resize-none"
+                  rows={5}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all resize-y min-h-[120px]"
                   placeholder="Paste job description..."
                 />
               ) : (
@@ -313,8 +313,8 @@ export default function EmailGenerator() {
                       <textarea
                         value={jobDesc}
                         onChange={(e) => updateJD(index, e.target.value)}
-                        rows={6}
-                        className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all resize-none"
+                        rows={4}
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all resize-y min-h-[100px]"
                         placeholder={`Job ${index + 1}...`}
                       />
                       {multipleJDs.length > 1 && (
@@ -442,8 +442,8 @@ export default function EmailGenerator() {
                           newEmails[index].body = e.target.value;
                           setGeneratedEmails(newEmails);
                         }}
-                        rows={10}
-                        className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all resize-none"
+                        rows={6}
+                        className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-500 focus:border-transparent transition-all resize-y min-h-[120px]"
                       />
                     </div>
                   </div>
@@ -482,7 +482,7 @@ export default function EmailGenerator() {
                       onClick={() => copyEmail(email, index)}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="px-4 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg transition-colors flex items-center"
+                      className="px-4 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg transition-colors flex items-center justify-center"
                     >
                       {copiedIndex === index ? (
                         <>
